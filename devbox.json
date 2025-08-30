@@ -1,0 +1,28 @@
+{
+  "packages": [
+    "gcc_multi",
+    "gnumake",
+    "coreutils",
+    "stdenv",
+    "meson",
+    "ninja",
+    "pkgsi686Linux.glslang",
+    "pkgsi686Linux.libglvnd",
+    "mesa",
+    "pkgsi686Linux.xorg.libX11",
+    "pkgsi686Linux.xorg.libX11.dev",
+    "dbus",
+    "pkgsi686Linux.wayland",
+    "pkgsi686Linux.xorg.libxcb",
+    "python312",
+    "python312Packages.pip",
+    "cmake",
+    "pkgsi686Linux.pkg-config",
+    "pkgsi686Linux.libxkbcommon"
+  ],
+  "shell": {
+    "init_hook": [],
+    "scripts": {}
+  }
+}
+

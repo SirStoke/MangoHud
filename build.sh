@@ -145,22 +145,24 @@ configure() {
     dependencies
     git submodule update --init --depth 50
     CONFIGURE_OPTS="-Dwerror=true"
-    if [[ ! -f "build/meson64/build.ninja" ]]; then
-        meson build/meson64 --libdir lib/mangohud/lib64 --prefix /usr -Dappend_libdir_mangohud=false $@ ${CONFIGURE_OPTS}
-    fi
+#    if [[ ! -f "build/meson64/build.ninja" ]]; then
+#        meson build/meson64 --libdir lib/mangohud/lib64 --prefix /usr -Dappend_libdir_mangohud=false $@ ${CONFIGURE_OPTS}
+#    fi
     if [[ ! -f "build/meson32/build.ninja" && "$MACHINE" = "x86_64" ]]; then
         export CC="gcc -m32"
         export CXX="g++ -m32"
         export PKG_CONFIG_PATH="/usr/lib32/pkgconfig:/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib/pkgconfig:${PKG_CONFIG_PATH_32}"
+        echo $PKG_CONFIG_PATH
+        echo meson build/meson32 --libdir lib/mangohud/lib32 --prefix /usr -Dappend_libdir_mangohud=false $@ ${CONFIGURE_OPTS}
         meson build/meson32 --libdir lib/mangohud/lib32 --prefix /usr -Dappend_libdir_mangohud=false $@ ${CONFIGURE_OPTS}
     fi
 }
 
 build() {
-    if [[ ! -f "build/meson64/build.ninja" ]]; then
-        configure $@
-    fi
-    DESTDIR="$PWD/build/release" ninja -C build/meson64 install
+#    if [[ ! -f "build/meson64/build.ninja" ]]; then
+#        configure $@
+#    fi
+#    DESTDIR="$PWD/build/release" ninja -C build/meson64 install
 
     if [ "$MACHINE" = "x86_64" ]; then
         DESTDIR="$PWD/build/release" ninja -C build/meson32 install
