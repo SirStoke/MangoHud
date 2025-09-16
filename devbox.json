@@ -14,15 +14,16 @@
     "dbus",
     "pkgsi686Linux.wayland",
     "pkgsi686Linux.xorg.libxcb",
-    "python312",
     "python312Packages.pip",
     "cmake",
     "pkgsi686Linux.pkg-config",
-    "pkgsi686Linux.libxkbcommon"
+    "pkgsi686Linux.libxkbcommon",
+    "python312Packages.requests@latest",
+    "python312Packages.pillow@latest",
+    "python312@latest"
   ],
   "shell": {
     "init_hook": [],
-    "scripts": {}
+    "scripts":   {}
   }
 }
-
