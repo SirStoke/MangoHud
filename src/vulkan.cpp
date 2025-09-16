@@ -67,13 +67,18 @@ int hudFirstRow, hudSecondRow;
 VkPhysicalDeviceDriverProperties driverProps = {};
 
 #if !defined(_WIN32)
-namespace MangoHud { namespace GL {
-   extern swapchain_stats sw_stats;
-}}
+namespace MangoHud
+{
+   namespace GL
+   {
+      extern swapchain_stats sw_stats;
+   }
+}
 #endif
 
 /* Mapped from VkInstace/VkPhysicalDevice */
-struct instance_data {
+struct instance_data
+{
    struct vk_instance_dispatch_table vtable;
    VkInstance instance;
    struct overlay_params params;
@@ -86,7 +91,8 @@ struct instance_data {
 
 /* Mapped from VkDevice */
 struct queue_data;
-struct device_data {
+struct device_data
+{
    struct instance_data *instance;
 
    PFN_vkSetDeviceLoaderData set_device_loader_data;
@@ -103,7 +109,8 @@ struct device_data {
 };
 
 /* Mapped from VkCommandBuffer */
-struct command_buffer_data {
+struct command_buffer_data
+{
    struct device_data *device;
 
    VkCommandBufferLevel level;
@@ -114,7 +121,8 @@ struct command_buffer_data {
 };
 
 /* Mapped from VkQueue */
-struct queue_data {
+struct queue_data
+{
    struct device_data *device;
 
    VkQueue queue;
@@ -122,7 +130,8 @@ struct queue_data {
    uint32_t family_index;
 };
 
-struct overlay_draw {
+struct overlay_draw
+{
    VkCommandBuffer command_buffer;
 
    VkSemaphore cross_engine_semaphore;
@@ -140,7 +149,8 @@ struct overlay_draw {
 };
 
 /* Mapped from VkSwapchainKHR */
-struct swapchain_data {
+struct swapchain_data
+{
    struct device_data *device;
 
    VkSwapchainKHR swapchain;
@@ -174,8 +184,8 @@ struct swapchain_data {
    VkDeviceMemory upload_font_buffer_mem;
 
    /**/
-   ImGuiContext* imgui_context;
-   ImFontAtlas* font_atlas;
+   ImGuiContext *imgui_context;
+   ImFontAtlas *font_atlas;
    ImVec2 window_size;
 
    struct swapchain_stats sw_stats;
@@ -186,7 +196,7 @@ std::mutex global_lock;
 typedef std::lock_guard<std::mutex> scoped_lock;
 std::unordered_map<uint64_t, void *> vk_object_to_data;
 
-thread_local ImGuiContext* __MesaImGui;
+thread_local ImGuiContext *__MesaImGui;
 
 #define HKEY(obj) ((uint64_t)(obj))
 #define FIND(type, obj) (reinterpret_cast<type *>(find_object_data(HKEY(obj))))
@@ -211,26 +221,29 @@ static void unmap_object(uint64_t obj)
 
 /**/
 
-#define VK_CHECK(expr) \
-   do { \
-      VkResult __result = (expr); \
-      if (__result != VK_SUCCESS) { \
-         SPDLOG_ERROR("'{}' line {} failed with {}", \
-                 #expr, __LINE__, vk_Result_to_str(__result)); \
-      } \
+#define VK_CHECK(expr)                                              \
+   do                                                               \
+   {                                                                \
+      VkResult __result = (expr);                                   \
+      if (__result != VK_SUCCESS)                                   \
+      {                                                             \
+         SPDLOG_ERROR("'{}' line {} failed with {}",                \
+                      #expr, __LINE__, vk_Result_to_str(__result)); \
+      }                                                             \
    } while (0)
 
 /**/
 
-static void shutdown_swapchain_font(struct swapchain_data*);
+static void shutdown_swapchain_font(struct swapchain_data *);
 
 static VkLayerInstanceCreateInfo *get_instance_chain_info(const VkInstanceCreateInfo *pCreateInfo,
                                                           VkLayerFunction func)
 {
-   vk_foreach_struct(item, pCreateInfo->pNext) {
+   vk_foreach_struct(item, pCreateInfo->pNext)
+   {
       if (item->sType == VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO &&
-          ((VkLayerInstanceCreateInfo *) item)->function == func)
-         return (VkLayerInstanceCreateInfo *) item;
+          ((VkLayerInstanceCreateInfo *)item)->function == func)
+         return (VkLayerInstanceCreateInfo *)item;
    }
    unreachable("instance chain info not found");
    return NULL;
@@ -239,9 +252,10 @@ static VkLayerInstanceCreateInfo *get_instance_chain_info(const VkInstanceCreate
 static VkLayerDeviceCreateInfo *get_device_chain_info(const VkDeviceCreateInfo *pCreateInfo,
                                                       VkLayerFunction func)
 {
-   vk_foreach_struct(item, pCreateInfo->pNext) {
+   vk_foreach_struct(item, pCreateInfo->pNext)
+   {
       if (item->sType == VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO &&
-          ((VkLayerDeviceCreateInfo *) item)->function == func)
+          ((VkLayerDeviceCreateInfo *)item)->function == func)
          return (VkLayerDeviceCreateInfo *)item;
    }
    unreachable("device chain info not found");
@@ -282,7 +296,8 @@ static void instance_data_map_physical_devices(struct instance_data *instance_da
                                                   &physicalDeviceCount,
                                                   physicalDevices.data());
 
-   for (uint32_t i = 0; i < physicalDeviceCount; i++) {
+   for (uint32_t i = 0; i < physicalDeviceCount; i++)
+   {
       if (map)
          map_object(HKEY(physicalDevices[i]), instance_data);
       else
@@ -343,8 +358,10 @@ static void device_map_queues(struct device_data *data,
                                                                 family_props.data());
 
    uint32_t queue_index = 0;
-   for (uint32_t i = 0; i < pCreateInfo->queueCreateInfoCount; i++) {
-      for (uint32_t j = 0; j < pCreateInfo->pQueueCreateInfos[i].queueCount; j++) {
+   for (uint32_t i = 0; i < pCreateInfo->queueCreateInfoCount; i++)
+   {
+      for (uint32_t j = 0; j < pCreateInfo->pQueueCreateInfos[i].queueCount; j++)
+      {
          VkQueue queue;
          data->vtable.GetDeviceQueue(data->device,
                                      pCreateInfo->pQueueCreateInfos[i].queueFamilyIndex,
@@ -353,8 +370,8 @@ static void device_map_queues(struct device_data *data,
          VK_CHECK(data->set_device_loader_data(data->device, queue));
 
          data->queues[queue_index++] =
-            new_queue_data(queue, &family_props[pCreateInfo->pQueueCreateInfos[i].queueFamilyIndex],
-                           pCreateInfo->pQueueCreateInfos[i].queueFamilyIndex, data);
+             new_queue_data(queue, &family_props[pCreateInfo->pQueueCreateInfos[i].queueFamilyIndex],
+                            pCreateInfo->pQueueCreateInfos[i].queueFamilyIndex, data);
       }
    }
 }
@@ -413,13 +430,13 @@ static void destroy_swapchain_data(struct swapchain_data *data)
 static struct overlay_draw *get_overlay_draw(struct swapchain_data *data)
 {
    struct device_data *device_data = data->device;
-   struct overlay_draw *draw = data->draws.empty() ?
-      nullptr : data->draws.front();
+   struct overlay_draw *draw = data->draws.empty() ? nullptr : data->draws.front();
 
    VkSemaphoreCreateInfo sem_info = {};
    sem_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-   if (draw && device_data->vtable.GetFenceStatus(device_data->device, draw->fence) == VK_SUCCESS) {
+   if (draw && device_data->vtable.GetFenceStatus(device_data->device, draw->fence) == VK_SUCCESS)
+   {
       VK_CHECK(device_data->vtable.ResetFences(device_data->device,
                                                1, &draw->fence));
       data->draws.pop_front();
@@ -439,7 +456,6 @@ static struct overlay_draw *get_overlay_draw(struct swapchain_data *data)
                                                        &draw->command_buffer));
    VK_CHECK(device_data->set_device_loader_data(device_data->device,
                                                 draw->command_buffer));
-
 
    VkFenceCreateInfo fence_info = {};
    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -465,7 +481,8 @@ static void snapshot_swapchain_frame(struct swapchain_data *data)
    update_hud_info(data->sw_stats, instance_data->params, device_data->properties.vendorID);
    check_keybinds(instance_data->params);
 #ifdef __linux__
-   if (instance_data->params.control >= 0) {
+   if (instance_data->params.control >= 0)
+   {
       control_client_check(instance_data->params.control, instance_data->control_client, gpu.c_str());
       process_control_socket(instance_data->control_client, instance_data->params);
    }
@@ -494,19 +511,18 @@ static void compute_swapchain_display(struct swapchain_data *data)
    }
    ImGui::EndFrame();
    ImGui::Render();
-
 }
 
 static uint32_t vk_memory_type(struct device_data *data,
                                VkMemoryPropertyFlags properties,
                                uint32_t type_bits)
 {
-    VkPhysicalDeviceMemoryProperties prop;
-    data->instance->vtable.GetPhysicalDeviceMemoryProperties(data->physical_device, &prop);
-    for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
-        if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1<<i))
-            return i;
-    return 0xFFFFFFFF; // Unable to find memoryType
+   VkPhysicalDeviceMemoryProperties prop;
+   data->instance->vtable.GetPhysicalDeviceMemoryProperties(data->physical_device, &prop);
+   for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
+      if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1 << i))
+         return i;
+   return 0xFFFFFFFF; // Unable to find memoryType
 }
 
 static void update_image_descriptor(struct swapchain_data *data, VkImageView image_view, VkDescriptorSet set)
@@ -532,8 +548,8 @@ static void upload_image_data(struct device_data *device_data,
                               VkDeviceSize upload_size,
                               uint32_t width,
                               uint32_t height,
-                              VkBuffer& upload_buffer,
-                              VkDeviceMemory& upload_buffer_mem,
+                              VkBuffer &upload_buffer,
+                              VkDeviceMemory &upload_buffer_mem,
                               VkImage image)
 {
    /* Upload buffer */
@@ -563,10 +579,10 @@ static void upload_image_data(struct device_data *device_data,
                                                  upload_buffer_mem, 0));
 
    /* Upload to Buffer */
-   char* map = NULL;
+   char *map = NULL;
    VK_CHECK(device_data->vtable.MapMemory(device_data->device,
                                           upload_buffer_mem,
-                                          0, upload_size, 0, (void**)(&map)));
+                                          0, upload_size, 0, (void **)(&map)));
    memcpy(map, pixels, upload_size);
    VkMappedMemoryRange range[1] = {};
    range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -628,13 +644,13 @@ static void upload_image_data(struct device_data *device_data,
 }
 
 static void create_image(struct swapchain_data *data,
-                        VkDescriptorSet descriptor_set,
-                        uint32_t width,
-                        uint32_t height,
-                        VkFormat format,
-                        VkImage& image,
-                        VkDeviceMemory& image_mem,
-                        VkImageView& image_view)
+                         VkDescriptorSet descriptor_set,
+                         uint32_t width,
+                         uint32_t height,
+                         VkFormat format,
+                         VkImage &image,
+                         VkDeviceMemory &image_mem,
+                         VkImageView &image_view)
 {
    struct device_data *device_data = data->device;
 
@@ -685,18 +701,18 @@ static void create_image(struct swapchain_data *data,
 }
 
 static VkDescriptorSet create_image_with_desc(struct swapchain_data *data,
-                                          uint32_t width,
-                                          uint32_t height,
-                                          VkFormat format,
-                                          VkImage& image,
-                                          VkDeviceMemory& image_mem,
-                                          VkImageView& image_view)
+                                              uint32_t width,
+                                              uint32_t height,
+                                              VkFormat format,
+                                              VkImage &image,
+                                              VkDeviceMemory &image_mem,
+                                              VkImageView &image_view)
 {
    struct device_data *device_data = data->device;
 
-   VkDescriptorSet descriptor_set {};
+   VkDescriptorSet descriptor_set{};
 
-   VkDescriptorSetAllocateInfo alloc_info {};
+   VkDescriptorSetAllocateInfo alloc_info{};
    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
    alloc_info.descriptorPool = data->descriptor_pool;
    alloc_info.descriptorSetCount = 1;
@@ -709,18 +725,18 @@ static VkDescriptorSet create_image_with_desc(struct swapchain_data *data,
    return descriptor_set;
 }
 
-static void check_fonts(struct swapchain_data* data)
+static void check_fonts(struct swapchain_data *data)
 {
    struct device_data *device_data = data->device;
    struct instance_data *instance_data = device_data->instance;
-   auto& params = instance_data->params;
+   auto &params = instance_data->params;
 
    if (params.font_params_hash != data->sw_stats.font_params_hash)
    {
       SPDLOG_DEBUG("Recreating font image");
       VkDescriptorSet desc_set = (VkDescriptorSet)data->font_atlas->TexID;
       create_fonts(data->font_atlas, instance_data->params, data->sw_stats.font_small, data->sw_stats.font_text, data->sw_stats.font_secondary);
-      unsigned char* pixels;
+      unsigned char *pixels;
       int width, height;
       data->font_atlas->GetTexDataAsAlpha8(&pixels, &width, &height);
 
@@ -751,7 +767,7 @@ static void ensure_swapchain_fonts(struct swapchain_data *data,
       return;
 
    data->font_uploaded = true;
-   unsigned char* pixels;
+   unsigned char *pixels;
    int width, height;
    data->font_atlas->GetTexDataAsAlpha8(&pixels, &width, &height);
    size_t upload_size = width * height * 1 * sizeof(char);
@@ -764,35 +780,35 @@ static void CreateOrResizeBuffer(struct device_data *data,
                                  VkDeviceSize *buffer_size,
                                  size_t new_size, VkBufferUsageFlagBits usage)
 {
-    if (*buffer != VK_NULL_HANDLE)
-        data->vtable.DestroyBuffer(data->device, *buffer, NULL);
-    if (*buffer_memory)
-        data->vtable.FreeMemory(data->device, *buffer_memory, NULL);
+   if (*buffer != VK_NULL_HANDLE)
+      data->vtable.DestroyBuffer(data->device, *buffer, NULL);
+   if (*buffer_memory)
+      data->vtable.FreeMemory(data->device, *buffer_memory, NULL);
 
-    if (data->properties.limits.nonCoherentAtomSize > 0)
-    {
+   if (data->properties.limits.nonCoherentAtomSize > 0)
+   {
       VkDeviceSize atom_size = data->properties.limits.nonCoherentAtomSize - 1;
       new_size = (new_size + atom_size) & ~atom_size;
-    }
+   }
 
-    VkBufferCreateInfo buffer_info = {};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = new_size;
-    buffer_info.usage = usage;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    VK_CHECK(data->vtable.CreateBuffer(data->device, &buffer_info, NULL, buffer));
+   VkBufferCreateInfo buffer_info = {};
+   buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+   buffer_info.size = new_size;
+   buffer_info.usage = usage;
+   buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+   VK_CHECK(data->vtable.CreateBuffer(data->device, &buffer_info, NULL, buffer));
 
-    VkMemoryRequirements req;
-    data->vtable.GetBufferMemoryRequirements(data->device, *buffer, &req);
-    VkMemoryAllocateInfo alloc_info = {};
-    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc_info.allocationSize = req.size;
-    alloc_info.memoryTypeIndex =
+   VkMemoryRequirements req;
+   data->vtable.GetBufferMemoryRequirements(data->device, *buffer, &req);
+   VkMemoryAllocateInfo alloc_info = {};
+   alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+   alloc_info.allocationSize = req.size;
+   alloc_info.memoryTypeIndex =
        vk_memory_type(data, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
-    VK_CHECK(data->vtable.AllocateMemory(data->device, &alloc_info, NULL, buffer_memory));
+   VK_CHECK(data->vtable.AllocateMemory(data->device, &alloc_info, NULL, buffer_memory));
 
-    VK_CHECK(data->vtable.BindBufferMemory(data->device, *buffer, *buffer_memory, 0));
-    *buffer_size = new_size;
+   VK_CHECK(data->vtable.BindBufferMemory(data->device, *buffer, *buffer_memory, 0));
+   *buffer_size = new_size;
 }
 
 static struct overlay_draw *render_swapchain_display(struct swapchain_data *data,
@@ -801,7 +817,7 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
                                                      unsigned n_wait_semaphores,
                                                      unsigned image_index)
 {
-   ImDrawData* draw_data = ImGui::GetDrawData();
+   ImDrawData *draw_data = ImGui::GetDrawData();
    struct device_data *device_data = data->device;
 
    if (!draw_data || draw_data->TotalVtxCount == 0 || device_data->instance->params.no_display)
@@ -857,14 +873,16 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
    /* Create/Resize vertex & index buffers */
    size_t vertex_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
    size_t index_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
-   if (draw->vertex_buffer_size < vertex_size) {
+   if (draw->vertex_buffer_size < vertex_size)
+   {
       CreateOrResizeBuffer(device_data,
                            &draw->vertex_buffer,
                            &draw->vertex_buffer_mem,
                            &draw->vertex_buffer_size,
                            vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
    }
-   if (draw->index_buffer_size < index_size) {
+   if (draw->index_buffer_size < index_size)
+   {
       CreateOrResizeBuffer(device_data,
                            &draw->index_buffer,
                            &draw->index_buffer_mem,
@@ -873,20 +891,20 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
    }
 
    /* Upload vertex & index data */
-   ImDrawVert* vtx_dst = NULL;
-   ImDrawIdx* idx_dst = NULL;
+   ImDrawVert *vtx_dst = NULL;
+   ImDrawIdx *idx_dst = NULL;
    VK_CHECK(device_data->vtable.MapMemory(device_data->device, draw->vertex_buffer_mem,
-                                          0, draw->vertex_buffer_size, 0, (void**)(&vtx_dst)));
+                                          0, draw->vertex_buffer_size, 0, (void **)(&vtx_dst)));
    VK_CHECK(device_data->vtable.MapMemory(device_data->device, draw->index_buffer_mem,
-                                          0, draw->index_buffer_size, 0, (void**)(&idx_dst)));
+                                          0, draw->index_buffer_size, 0, (void **)(&idx_dst)));
    for (int n = 0; n < draw_data->CmdListsCount; n++)
-      {
-         const ImDrawList* cmd_list = draw_data->CmdLists[n];
-         memcpy(vtx_dst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
-         memcpy(idx_dst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
-         vtx_dst += cmd_list->VtxBuffer.Size;
-         idx_dst += cmd_list->IdxBuffer.Size;
-      }
+   {
+      const ImDrawList *cmd_list = draw_data->CmdLists[n];
+      memcpy(vtx_dst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+      memcpy(idx_dst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+      vtx_dst += cmd_list->VtxBuffer.Size;
+      idx_dst += cmd_list->IdxBuffer.Size;
+   }
    VkMappedMemoryRange range[2] = {};
    range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
    range[0].memory = draw->vertex_buffer_mem;
@@ -903,16 +921,15 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
 
 #if 1 // disable if using >1 font textures
    VkDescriptorSet desc_set[1] = {
-      //data->descriptor_set
-      reinterpret_cast<VkDescriptorSet>(data->font_atlas->TexID)
-   };
+       //data->descriptor_set
+       reinterpret_cast<VkDescriptorSet>(data->font_atlas->TexID)};
    device_data->vtable.CmdBindDescriptorSets(draw->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                              data->pipeline_layout, 0, 1, desc_set, 0, NULL);
 #endif
 
    /* Bind vertex & index buffers */
-   VkBuffer vertex_buffers[1] = { draw->vertex_buffer };
-   VkDeviceSize vertex_offset[1] = { 0 };
+   VkBuffer vertex_buffers[1] = {draw->vertex_buffer};
+   VkDeviceSize vertex_offset[1] = {0};
    device_data->vtable.CmdBindVertexBuffers(draw->command_buffer, 0, 1, vertex_buffers, vertex_offset);
    device_data->vtable.CmdBindIndexBuffer(draw->command_buffer, draw->index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
@@ -925,7 +942,6 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
    viewport.minDepth = 0.0f;
    viewport.maxDepth = 1.0f;
    device_data->vtable.CmdSetViewport(draw->command_buffer, 0, 1, &viewport);
-
 
    /* Setup scale and translation through push constants :
    *
@@ -940,11 +956,11 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
    translate[0] = -1.0f - draw_data->DisplayPos.x * scale[0];
    translate[1] = -1.0f - draw_data->DisplayPos.y * scale[1];
    device_data->vtable.CmdPushConstants(draw->command_buffer, data->pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       sizeof(float) * 0, sizeof(float) * 2, scale);
+                                        VK_SHADER_STAGE_VERTEX_BIT,
+                                        sizeof(float) * 0, sizeof(float) * 2, scale);
    device_data->vtable.CmdPushConstants(draw->command_buffer, data->pipeline_layout,
-                                       VK_SHADER_STAGE_VERTEX_BIT,
-                                       sizeof(float) * 2, sizeof(float) * 2, translate);
+                                        VK_SHADER_STAGE_VERTEX_BIT,
+                                        sizeof(float) * 2, sizeof(float) * 2, translate);
 
    // Render the command lists:
    int vtx_offset = 0;
@@ -952,10 +968,10 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
    ImVec2 display_pos = draw_data->DisplayPos;
    for (int n = 0; n < draw_data->CmdListsCount; n++)
    {
-      const ImDrawList* cmd_list = draw_data->CmdLists[n];
+      const ImDrawList *cmd_list = draw_data->CmdLists[n];
       for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++)
       {
-         const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+         const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[cmd_i];
          // Apply scissor/clipping rectangle
          // FIXME: We could clamp width/height based on clamped min/max values.
          VkRect2D scissor;
@@ -1014,7 +1030,8 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
     * vkQueuePresent, insert our own cross engine synchronization
     * semaphore.
     */
-   if (n_wait_semaphores == 0 && device_data->graphic_queue->queue != present_queue->queue) {
+   if (n_wait_semaphores == 0 && device_data->graphic_queue->queue != present_queue->queue)
+   {
       VkPipelineStageFlags stages_wait = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
       VkSubmitInfo submit_info = {};
       submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1036,7 +1053,9 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
       submit_info.pSignalSemaphores = &draw->semaphore;
 
       device_data->vtable.QueueSubmit(device_data->graphic_queue->queue, 1, &submit_info, draw->fence);
-   } else {
+   }
+   else
+   {
       // wait in the fragment stage until the swapchain image is ready
       std::vector<VkPipelineStageFlags> stages_wait(n_wait_semaphores, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
@@ -1078,7 +1097,7 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
    VkShaderModuleCreateInfo frag_info = {};
    frag_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
    frag_info.codeSize = sizeof(overlay_frag_spv);
-   frag_info.pCode = (uint32_t*)overlay_frag_spv;
+   frag_info.pCode = (uint32_t *)overlay_frag_spv;
    VK_CHECK(device_data->vtable.CreateShaderModule(device_data->device,
                                                    &frag_info, NULL, &frag_module));
 
@@ -1111,7 +1130,7 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
                                                      NULL, &data->descriptor_pool));
 
    /* Descriptor layout */
-   VkSampler sampler[1] = { data->font_sampler };
+   VkSampler sampler[1] = {data->font_sampler};
    VkDescriptorSetLayoutBinding binding[1] = {};
    binding[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
    binding[0].descriptorCount = 1;
@@ -1126,7 +1145,7 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
                                                           NULL, &data->descriptor_layout));
 
    /* Descriptor set */
-/*
+   /*
    VkDescriptorSetAllocateInfo alloc_info = {};
    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
    alloc_info.descriptorPool = data->descriptor_pool;
@@ -1218,7 +1237,7 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
    color_attachment[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
    color_attachment[0].alphaBlendOp = VK_BLEND_OP_ADD;
    color_attachment[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-      VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+                                        VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
    VkPipelineDepthStencilStateCreateInfo depth_info = {};
    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -1228,7 +1247,7 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
    blend_info.attachmentCount = 1;
    blend_info.pAttachments = color_attachment;
 
-   VkDynamicState dynamic_states[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+   VkDynamicState dynamic_states[2] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
    VkPipelineDynamicStateCreateInfo dynamic_state = {};
    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
    dynamic_state.dynamicStateCount = (uint32_t)IM_ARRAYSIZE(dynamic_states);
@@ -1250,77 +1269,80 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
    info.layout = data->pipeline_layout;
    info.renderPass = data->render_pass;
    VK_CHECK(
-      device_data->vtable.CreateGraphicsPipelines(device_data->device, VK_NULL_HANDLE,
-                                                  1, &info,
-                                                  NULL, &data->pipeline));
+       device_data->vtable.CreateGraphicsPipelines(device_data->device, VK_NULL_HANDLE,
+                                                   1, &info,
+                                                   NULL, &data->pipeline));
 
    device_data->vtable.DestroyShaderModule(device_data->device, vert_module, NULL);
    device_data->vtable.DestroyShaderModule(device_data->device, frag_module, NULL);
 
    check_fonts(data);
 
-//   if (data->descriptor_set)
-//      update_image_descriptor(data, data->font_image_view[0], data->descriptor_set);
+   //   if (data->descriptor_set)
+   //      update_image_descriptor(data, data->font_image_view[0], data->descriptor_set);
 }
 
-static void convert_colors_vk(VkFormat format, VkColorSpaceKHR colorspace, struct swapchain_stats& sw_stats, struct overlay_params& params)
+static void convert_colors_vk(VkFormat format, VkColorSpaceKHR colorspace, struct swapchain_stats &sw_stats, struct overlay_params &params)
 {
    /* TODO: Support more colorspacess */
-   switch (colorspace) {
-      case VK_COLOR_SPACE_HDR10_ST2084_EXT:
-         params.transfer_function = PQ;
-         break;
-      case VK_COLOR_SPACE_HDR10_HLG_EXT:
-         params.transfer_function = HLG;
-         break;
-      case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
-         params.transfer_function = SRGB;
-         break;
-      /* use no conversion for rest of the colorspaces */
-      default:
-         params.transfer_function = NONE;
-         break;
+   switch (colorspace)
+   {
+   case VK_COLOR_SPACE_HDR10_ST2084_EXT:
+      params.transfer_function = PQ;
+      break;
+   case VK_COLOR_SPACE_HDR10_HLG_EXT:
+      params.transfer_function = HLG;
+      break;
+   case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT:
+      params.transfer_function = SRGB;
+      break;
+   /* use no conversion for rest of the colorspaces */
+   default:
+      params.transfer_function = NONE;
+      break;
    }
 
    if (params.transfer_function == NONE)
    {
-      switch (format) {
-         case VK_FORMAT_R8_SRGB:
-         case VK_FORMAT_R8G8_SRGB:
-         case VK_FORMAT_R8G8B8_SRGB:
-         case VK_FORMAT_B8G8R8_SRGB:
-         case VK_FORMAT_R8G8B8A8_SRGB:
-         case VK_FORMAT_B8G8R8A8_SRGB:
-         case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
-         case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
-         case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
-         case VK_FORMAT_BC2_SRGB_BLOCK:
-         case VK_FORMAT_BC3_SRGB_BLOCK:
-         case VK_FORMAT_BC7_SRGB_BLOCK:
-         case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
-         case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
-         case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
-         case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
-         case VK_FORMAT_PVRTC1_2BPP_SRGB_BLOCK_IMG:
-         case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG:
-         case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG:
-         case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG:
-            params.transfer_function = SRGB;
-            break;
-         default: break;
+      switch (format)
+      {
+      case VK_FORMAT_R8_SRGB:
+      case VK_FORMAT_R8G8_SRGB:
+      case VK_FORMAT_R8G8B8_SRGB:
+      case VK_FORMAT_B8G8R8_SRGB:
+      case VK_FORMAT_R8G8B8A8_SRGB:
+      case VK_FORMAT_B8G8R8A8_SRGB:
+      case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+      case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+      case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+      case VK_FORMAT_BC2_SRGB_BLOCK:
+      case VK_FORMAT_BC3_SRGB_BLOCK:
+      case VK_FORMAT_BC7_SRGB_BLOCK:
+      case VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+      case VK_FORMAT_ETC2_R8G8B8A1_SRGB_BLOCK:
+      case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_4x4_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_5x4_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_5x5_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_6x5_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_6x6_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_8x5_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_8x6_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_8x8_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_10x5_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_10x6_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_10x8_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_10x10_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_12x10_SRGB_BLOCK:
+      case VK_FORMAT_ASTC_12x12_SRGB_BLOCK:
+      case VK_FORMAT_PVRTC1_2BPP_SRGB_BLOCK_IMG:
+      case VK_FORMAT_PVRTC1_4BPP_SRGB_BLOCK_IMG:
+      case VK_FORMAT_PVRTC2_2BPP_SRGB_BLOCK_IMG:
+      case VK_FORMAT_PVRTC2_4BPP_SRGB_BLOCK_IMG:
+         params.transfer_function = SRGB;
+         break;
+      default:
+         break;
       }
    }
 
@@ -1398,8 +1420,8 @@ static void setup_swapchain_data(struct swapchain_data *data,
                                                       &n_images,
                                                       data->images.data()));
 
-
-   if (n_images != data->images.size()) {
+   if (n_images != data->images.size())
+   {
       data->images.resize(n_images);
       data->image_views.resize(n_images);
       data->framebuffers.resize(n_images);
@@ -1414,8 +1436,9 @@ static void setup_swapchain_data(struct swapchain_data *data,
    view_info.components.g = VK_COMPONENT_SWIZZLE_G;
    view_info.components.b = VK_COMPONENT_SWIZZLE_B;
    view_info.components.a = VK_COMPONENT_SWIZZLE_A;
-   view_info.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-   for (size_t i = 0; i < data->images.size(); i++) {
+   view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+   for (size_t i = 0; i < data->images.size(); i++)
+   {
       view_info.image = data->images[i];
       VK_CHECK(device_data->vtable.CreateImageView(device_data->device,
                                                    &view_info, NULL,
@@ -1432,7 +1455,8 @@ static void setup_swapchain_data(struct swapchain_data *data,
    fb_info.width = data->width;
    fb_info.height = data->height;
    fb_info.layers = 1;
-   for (size_t i = 0; i < data->image_views.size(); i++) {
+   for (size_t i = 0; i < data->image_views.size(); i++)
+   {
       attachment[0] = data->image_views[i];
       VK_CHECK(device_data->vtable.CreateFramebuffer(device_data->device, &fb_info,
                                                      NULL, &data->framebuffers[i]));
@@ -1464,7 +1488,8 @@ static void shutdown_swapchain_data(struct swapchain_data *data)
 {
    struct device_data *device_data = data->device;
 
-   for (auto draw : data->draws) {
+   for (auto draw : data->draws)
+   {
       device_data->vtable.DestroySemaphore(device_data->device, draw->cross_engine_semaphore, NULL);
       device_data->vtable.DestroySemaphore(device_data->device, draw->semaphore, NULL);
       device_data->vtable.DestroyFence(device_data->device, draw->fence, NULL);
@@ -1475,7 +1500,8 @@ static void shutdown_swapchain_data(struct swapchain_data *data)
       delete draw;
    }
 
-   for (size_t i = 0; i < data->images.size(); i++) {
+   for (size_t i = 0; i < data->images.size(); i++)
+   {
       device_data->vtable.DestroyImageView(device_data->device, data->image_views[i], NULL);
       device_data->vtable.DestroyFramebuffer(device_data->device, data->framebuffers[i], NULL);
    }
@@ -1509,7 +1535,8 @@ static struct overlay_draw *before_present(struct swapchain_data *swapchain_data
 
    snapshot_swapchain_frame(swapchain_data);
 
-   if (swapchain_data->sw_stats.n_frames > 0) {
+   if (swapchain_data->sw_stats.n_frames > 0)
+   {
       compute_swapchain_display(swapchain_data);
       draw = render_swapchain_display(swapchain_data, present_queue,
                                       wait_semaphores, n_wait_semaphores,
@@ -1519,19 +1546,20 @@ static struct overlay_draw *before_present(struct swapchain_data *swapchain_data
    return draw;
 }
 
-static bool IsPresentModeSupported(VkPresentModeKHR targetPresentMode, const std::vector<VkPresentModeKHR>& supportedPresentModes) {
-   for (const auto& mode : supportedPresentModes)
+static bool IsPresentModeSupported(VkPresentModeKHR targetPresentMode, const std::vector<VkPresentModeKHR> &supportedPresentModes)
+{
+   for (const auto &mode : supportedPresentModes)
       if (mode == targetPresentMode)
          return true;
 
-    return false;  // Not found
+   return false; // Not found
 }
 
 static VkResult overlay_CreateSwapchainKHR(
-    VkDevice                                    device,
-    const VkSwapchainCreateInfoKHR*             pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkSwapchainKHR*                             pSwapchain)
+    VkDevice device,
+    const VkSwapchainCreateInfoKHR *pCreateInfo,
+    const VkAllocationCallbacks *pAllocator,
+    VkSwapchainKHR *pSwapchain)
 {
    VkSwapchainCreateInfoKHR createInfo = *pCreateInfo;
 
@@ -1540,29 +1568,35 @@ static VkResult overlay_CreateSwapchainKHR(
    struct device_data *device_data = FIND(struct device_data, device);
    auto params = device_data->instance->params;
 
-   if (device_data->instance->params.vsync < 4) {
+   if (device_data->instance->params.vsync < 4)
+   {
       HUDElements.cur_present_mode = HUDElements.presentModes[params.vsync];
       createInfo.presentMode = HUDElements.cur_present_mode;
-   } else {
+   }
+   else
+   {
       HUDElements.cur_present_mode = createInfo.presentMode;
    }
 
    struct instance_data *instance_data =
-      FIND(struct instance_data, device_data->physical_device);
+       FIND(struct instance_data, device_data->physical_device);
 
    PFN_vkGetPhysicalDeviceSurfacePresentModesKHR fpGetPhysicalDeviceSurfacePresentModesKHR =
-   (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR) instance_data->vtable.GetInstanceProcAddr(instance_data->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
+       (PFN_vkGetPhysicalDeviceSurfacePresentModesKHR)instance_data->vtable.GetInstanceProcAddr(instance_data->instance, "vkGetPhysicalDeviceSurfacePresentModesKHR");
 
-   if (fpGetPhysicalDeviceSurfacePresentModesKHR != NULL) {
+   if (fpGetPhysicalDeviceSurfacePresentModesKHR != NULL)
+   {
       uint32_t presentModeCount;
       std::vector<VkPresentModeKHR> presentModes(6);
       VkResult result = fpGetPhysicalDeviceSurfacePresentModesKHR(device_data->physical_device, pCreateInfo->surface, &presentModeCount, presentModes.data());
 
-      if (result == VK_SUCCESS) {
+      if (result == VK_SUCCESS)
+      {
          presentModes.resize(presentModeCount);
          if (IsPresentModeSupported(HUDElements.cur_present_mode, presentModes))
             SPDLOG_DEBUG("Present mode: {}", HUDElements.presentModeMap[HUDElements.cur_present_mode]);
-         else {
+         else
+         {
             SPDLOG_DEBUG("Present mode is not supported: {}", HUDElements.presentModeMap[HUDElements.cur_present_mode]);
             HUDElements.cur_present_mode = VK_PRESENT_MODE_FIFO_KHR;
             createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -1571,33 +1605,37 @@ static VkResult overlay_CreateSwapchainKHR(
    }
 
    VkResult result = device_data->vtable.CreateSwapchainKHR(device, &createInfo, pAllocator, pSwapchain);
-   if (result != VK_SUCCESS) return result;
+   if (result != VK_SUCCESS)
+      return result;
    struct swapchain_data *swapchain_data = new_swapchain_data(*pSwapchain, device_data);
    setup_swapchain_data(swapchain_data, pCreateInfo);
 
-   const VkPhysicalDeviceProperties& prop = device_data->properties;
+   const VkPhysicalDeviceProperties &prop = device_data->properties;
    swapchain_data->sw_stats.version_vk.major = VK_VERSION_MAJOR(prop.apiVersion);
    swapchain_data->sw_stats.version_vk.minor = VK_VERSION_MINOR(prop.apiVersion);
    swapchain_data->sw_stats.version_vk.patch = VK_VERSION_PATCH(prop.apiVersion);
-   swapchain_data->sw_stats.engineName    = device_data->instance->engineName;
+   swapchain_data->sw_stats.engineName = device_data->instance->engineName;
    swapchain_data->sw_stats.engineVersion = device_data->instance->engineVersion;
-   swapchain_data->sw_stats.engine        = device_data->instance->engine;
+   swapchain_data->sw_stats.engine = device_data->instance->engine;
 
    HUDElements.vendorID = prop.vendorID;
    std::stringstream ss;
-//   ss << prop.deviceName;
-   if (prop.vendorID == 0x10de) {
+   //   ss << prop.deviceName;
+   if (prop.vendorID == 0x10de)
+   {
       ss << " " << ((prop.driverVersion >> 22) & 0x3ff);
-      ss << "."  << ((prop.driverVersion >> 14) & 0x0ff);
-      ss << "."  << std::setw(2) << std::setfill('0') << ((prop.driverVersion >> 6) & 0x0ff);
+      ss << "." << ((prop.driverVersion >> 14) & 0x0ff);
+      ss << "." << std::setw(2) << std::setfill('0') << ((prop.driverVersion >> 6) & 0x0ff);
    }
 #ifdef _WIN32
-    else if (prop.vendorID == 0x8086) {
+   else if (prop.vendorID == 0x8086)
+   {
       ss << " " << (prop.driverVersion >> 14);
-      ss << "."  << (prop.driverVersion & 0x3fff);
+      ss << "." << (prop.driverVersion & 0x3fff);
    }
 #endif
-   else {
+   else
+   {
       ss << " " << VK_VERSION_MAJOR(prop.driverVersion);
       ss << "." << VK_VERSION_MINOR(prop.driverVersion);
       ss << "." << VK_VERSION_PATCH(prop.driverVersion);
@@ -1605,7 +1643,8 @@ static VkResult overlay_CreateSwapchainKHR(
    std::string driverVersion = ss.str();
 
    std::string deviceName = prop.deviceName;
-   if (!is_blacklisted()) {
+   if (!is_blacklisted())
+   {
 #ifdef __linux__
       swapchain_data->sw_stats.gpuName = remove_parentheses(deviceName);
 #endif
@@ -1616,18 +1655,19 @@ static VkResult overlay_CreateSwapchainKHR(
 }
 
 static void overlay_DestroySwapchainKHR(
-    VkDevice                                    device,
-    VkSwapchainKHR                              swapchain,
-    const VkAllocationCallbacks*                pAllocator)
+    VkDevice device,
+    VkSwapchainKHR swapchain,
+    const VkAllocationCallbacks *pAllocator)
 {
-   if (swapchain == VK_NULL_HANDLE) {
+   if (swapchain == VK_NULL_HANDLE)
+   {
       struct device_data *device_data = FIND(struct device_data, device);
       device_data->vtable.DestroySwapchainKHR(device, swapchain, pAllocator);
       return;
    }
 
    struct swapchain_data *swapchain_data =
-      FIND(struct swapchain_data, swapchain);
+       FIND(struct swapchain_data, swapchain);
 
    shutdown_swapchain_data(swapchain_data);
    swapchain_data->device->vtable.DestroySwapchainKHR(device, swapchain, pAllocator);
@@ -1635,11 +1675,12 @@ static void overlay_DestroySwapchainKHR(
 }
 
 static VkResult overlay_QueuePresentKHR(
-    VkQueue                                     queue,
-    const VkPresentInfoKHR*                     pPresentInfo)
+    VkQueue queue,
+    const VkPresentInfoKHR *pPresentInfo)
 {
    using namespace std::chrono_literals;
-   if (fps_limit_stats.targetFrameTime > 0s && fps_limit_stats.method == FPS_LIMIT_METHOD_EARLY){
+   if (fps_limit_stats.targetFrameTime > 0s && fps_limit_stats.method == FPS_LIMIT_METHOD_EARLY)
+   {
       fps_limit_stats.frameStart = Clock::now();
       FpsLimiter(fps_limit_stats);
       fps_limit_stats.frameEnd = Clock::now();
@@ -1652,10 +1693,11 @@ static VkResult overlay_QueuePresentKHR(
     * be have incomplete overlay drawings.
     */
    VkResult result = VK_SUCCESS;
-   for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++) {
+   for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++)
+   {
       VkSwapchainKHR swapchain = pPresentInfo->pSwapchains[i];
       struct swapchain_data *swapchain_data =
-         FIND(struct swapchain_data, swapchain);
+          FIND(struct swapchain_data, swapchain);
 
       uint32_t image_index = pPresentInfo->pImageIndices[i];
 
@@ -1665,17 +1707,18 @@ static VkResult overlay_QueuePresentKHR(
       present_info.pImageIndices = &image_index;
 
       struct overlay_draw *draw = before_present(swapchain_data,
-                                                   queue_data,
-                                                   pPresentInfo->pWaitSemaphores,
-                                                   i == 0 ? pPresentInfo->waitSemaphoreCount : 0,
-                                                   image_index);
+                                                 queue_data,
+                                                 pPresentInfo->pWaitSemaphores,
+                                                 i == 0 ? pPresentInfo->waitSemaphoreCount : 0,
+                                                 image_index);
 
       /* Because the submission of the overlay draw waits on the semaphores
          * handed for present, we don't need to have this present operation
          * wait on them as well, we can just wait on the overlay submission
          * semaphore.
          */
-      if (draw) {
+      if (draw)
+      {
          present_info.pWaitSemaphores = &draw->semaphore;
          present_info.waitSemaphoreCount = 1;
       }
@@ -1687,7 +1730,8 @@ static VkResult overlay_QueuePresentKHR(
          result = chain_result;
    }
 
-   if (fps_limit_stats.targetFrameTime > 0s && fps_limit_stats.method == FPS_LIMIT_METHOD_LATE){
+   if (fps_limit_stats.targetFrameTime > 0s && fps_limit_stats.method == FPS_LIMIT_METHOD_LATE)
+   {
       fps_limit_stats.frameStart = Clock::now();
       FpsLimiter(fps_limit_stats);
       fps_limit_stats.frameEnd = Clock::now();
@@ -1697,11 +1741,11 @@ static VkResult overlay_QueuePresentKHR(
 }
 
 static VkResult overlay_BeginCommandBuffer(
-    VkCommandBuffer                             commandBuffer,
-    const VkCommandBufferBeginInfo*             pBeginInfo)
+    VkCommandBuffer commandBuffer,
+    const VkCommandBufferBeginInfo *pBeginInfo)
 {
    struct command_buffer_data *cmd_buffer_data =
-      FIND(struct command_buffer_data, commandBuffer);
+       FIND(struct command_buffer_data, commandBuffer);
    struct device_data *device_data = cmd_buffer_data->device;
 
    /* Otherwise record a begin query as first command. */
@@ -1711,50 +1755,51 @@ static VkResult overlay_BeginCommandBuffer(
 }
 
 static VkResult overlay_EndCommandBuffer(
-    VkCommandBuffer                             commandBuffer)
+    VkCommandBuffer commandBuffer)
 {
    struct command_buffer_data *cmd_buffer_data =
-      FIND(struct command_buffer_data, commandBuffer);
+       FIND(struct command_buffer_data, commandBuffer);
    struct device_data *device_data = cmd_buffer_data->device;
 
    return device_data->vtable.EndCommandBuffer(commandBuffer);
 }
 
 static VkResult overlay_ResetCommandBuffer(
-    VkCommandBuffer                             commandBuffer,
-    VkCommandBufferResetFlags                   flags)
+    VkCommandBuffer commandBuffer,
+    VkCommandBufferResetFlags flags)
 {
    struct command_buffer_data *cmd_buffer_data =
-      FIND(struct command_buffer_data, commandBuffer);
+       FIND(struct command_buffer_data, commandBuffer);
    struct device_data *device_data = cmd_buffer_data->device;
 
    return device_data->vtable.ResetCommandBuffer(commandBuffer, flags);
 }
 
 static void overlay_CmdExecuteCommands(
-    VkCommandBuffer                             commandBuffer,
-    uint32_t                                    commandBufferCount,
-    const VkCommandBuffer*                      pCommandBuffers)
+    VkCommandBuffer commandBuffer,
+    uint32_t commandBufferCount,
+    const VkCommandBuffer *pCommandBuffers)
 {
    struct command_buffer_data *cmd_buffer_data =
-      FIND(struct command_buffer_data, commandBuffer);
+       FIND(struct command_buffer_data, commandBuffer);
    struct device_data *device_data = cmd_buffer_data->device;
 
    device_data->vtable.CmdExecuteCommands(commandBuffer, commandBufferCount, pCommandBuffers);
 }
 
 static VkResult overlay_AllocateCommandBuffers(
-   VkDevice                           device,
-   const VkCommandBufferAllocateInfo* pAllocateInfo,
-   VkCommandBuffer*                   pCommandBuffers)
+    VkDevice device,
+    const VkCommandBufferAllocateInfo *pAllocateInfo,
+    VkCommandBuffer *pCommandBuffers)
 {
    struct device_data *device_data = FIND(struct device_data, device);
    VkResult result =
-      device_data->vtable.AllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
+       device_data->vtable.AllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
    if (result != VK_SUCCESS)
       return result;
 
-   for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; i++) {
+   for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; i++)
+   {
       new_command_buffer_data(pCommandBuffers[i], pAllocateInfo->level,
                               device_data);
    }
@@ -1763,15 +1808,16 @@ static VkResult overlay_AllocateCommandBuffers(
 }
 
 static void overlay_FreeCommandBuffers(
-   VkDevice               device,
-   VkCommandPool          commandPool,
-   uint32_t               commandBufferCount,
-   const VkCommandBuffer* pCommandBuffers)
+    VkDevice device,
+    VkCommandPool commandPool,
+    uint32_t commandBufferCount,
+    const VkCommandBuffer *pCommandBuffers)
 {
    struct device_data *device_data = FIND(struct device_data, device);
-   for (uint32_t i = 0; i < commandBufferCount; i++) {
+   for (uint32_t i = 0; i < commandBufferCount; i++)
+   {
       struct command_buffer_data *cmd_buffer_data =
-         FIND(struct command_buffer_data, pCommandBuffers[i]);
+          FIND(struct command_buffer_data, pCommandBuffers[i]);
 
       /* It is legal to free a NULL command buffer*/
       if (!cmd_buffer_data)
@@ -1785,10 +1831,10 @@ static void overlay_FreeCommandBuffers(
 }
 
 static VkResult overlay_QueueSubmit(
-    VkQueue                                     queue,
-    uint32_t                                    submitCount,
-    const VkSubmitInfo*                         pSubmits,
-    VkFence                                     fence)
+    VkQueue queue,
+    uint32_t submitCount,
+    const VkSubmitInfo *pSubmits,
+    VkFence fence)
 {
    struct queue_data *queue_data = FIND(struct queue_data, queue);
    struct device_data *device_data = queue_data->device;
@@ -1797,31 +1843,31 @@ static VkResult overlay_QueueSubmit(
 }
 
 static VkResult overlay_CreateDevice(
-    VkPhysicalDevice                            physicalDevice,
-    const VkDeviceCreateInfo*                   pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkDevice*                                   pDevice)
+    VkPhysicalDevice physicalDevice,
+    const VkDeviceCreateInfo *pCreateInfo,
+    const VkAllocationCallbacks *pAllocator,
+    VkDevice *pDevice)
 {
    struct instance_data *instance_data =
-      FIND(struct instance_data, physicalDevice);
+       FIND(struct instance_data, physicalDevice);
    VkLayerDeviceCreateInfo *chain_info =
-      get_device_chain_info(pCreateInfo, VK_LAYER_LINK_INFO);
+       get_device_chain_info(pCreateInfo, VK_LAYER_LINK_INFO);
 
    assert(chain_info->u.pLayerInfo);
    PFN_vkGetInstanceProcAddr fpGetInstanceProcAddr = chain_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
    PFN_vkGetDeviceProcAddr fpGetDeviceProcAddr = chain_info->u.pLayerInfo->pfnNextGetDeviceProcAddr;
    PFN_vkCreateDevice fpCreateDevice = (PFN_vkCreateDevice)fpGetInstanceProcAddr(instance_data->instance, "vkCreateDevice");
-   if (fpCreateDevice == NULL) {
+   if (fpCreateDevice == NULL)
+   {
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
    // Advance the link info for the next element on the chain
    chain_info->u.pLayerInfo = chain_info->u.pLayerInfo->pNext;
 
-
-   std::vector<const char*> enabled_extensions(pCreateInfo->ppEnabledExtensionNames,
-                                               pCreateInfo->ppEnabledExtensionNames +
-                                               pCreateInfo->enabledExtensionCount);
+   std::vector<const char *> enabled_extensions(pCreateInfo->ppEnabledExtensionNames,
+                                                pCreateInfo->ppEnabledExtensionNames +
+                                                    pCreateInfo->enabledExtensionCount);
 
    uint32_t extension_count;
 
@@ -1830,28 +1876,32 @@ static VkResult overlay_CreateDevice(
    std::vector<VkExtensionProperties> available_extensions(extension_count);
    instance_data->vtable.EnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extension_count, available_extensions.data());
 
-
    bool can_get_driver_info = instance_data->api_version < VK_API_VERSION_1_1 ? false : true;
 
    // VK_KHR_driver_properties became core in 1.2
-   if (instance_data->api_version < VK_API_VERSION_1_2 && can_get_driver_info) {
-      for (auto& extension : available_extensions) {
-         if (extension.extensionName == std::string(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME)) {
-            for (auto& enabled : enabled_extensions) {
+   if (instance_data->api_version < VK_API_VERSION_1_2 && can_get_driver_info)
+   {
+      for (auto &extension : available_extensions)
+      {
+         if (extension.extensionName == std::string(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME))
+         {
+            for (auto &enabled : enabled_extensions)
+            {
                if (enabled == std::string(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME))
                   goto DONT;
             }
             enabled_extensions.push_back(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
-            DONT:
+         DONT:
             goto FOUND;
          }
       }
       can_get_driver_info = false;
-      FOUND:;
+   FOUND:;
    }
 
    VkResult result = fpCreateDevice(physicalDevice, pCreateInfo, pAllocator, pDevice);
-   if (result != VK_SUCCESS) return result;
+   if (result != VK_SUCCESS)
+      return result;
 
    struct device_data *device_data = new_device_data(*pDevice, instance_data);
    device_data->physical_device = physicalDevice;
@@ -1861,17 +1911,19 @@ static VkResult overlay_CreateDevice(
                                                      &device_data->properties);
 
    VkLayerDeviceCreateInfo *load_data_info =
-      get_device_chain_info(pCreateInfo, VK_LOADER_DATA_CALLBACK);
+       get_device_chain_info(pCreateInfo, VK_LOADER_DATA_CALLBACK);
    device_data->set_device_loader_data = load_data_info->u.pfnSetDeviceLoaderData;
 
    driverProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
    driverProps.pNext = nullptr;
-   if (can_get_driver_info) {
+   if (can_get_driver_info)
+   {
       VkPhysicalDeviceProperties2 deviceProps = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &driverProps};
       instance_data->vtable.GetPhysicalDeviceProperties2(device_data->physical_device, &deviceProps);
    }
 
-   if (!is_blacklisted()) {
+   if (!is_blacklisted())
+   {
       device_map_queues(device_data, pCreateInfo);
 #ifdef __linux__
       gpu = device_data->properties.deviceName;
@@ -1883,8 +1935,8 @@ static VkResult overlay_CreateDevice(
 }
 
 static void overlay_DestroyDevice(
-    VkDevice                                    device,
-    const VkAllocationCallbacks*                pAllocator)
+    VkDevice device,
+    const VkAllocationCallbacks *pAllocator)
 {
    struct device_data *device_data = FIND(struct device_data, device);
    if (!is_blacklisted())
@@ -1894,16 +1946,16 @@ static void overlay_DestroyDevice(
 }
 
 static VkResult overlay_CreateInstance(
-    const VkInstanceCreateInfo*                 pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkInstance*                                 pInstance)
+    const VkInstanceCreateInfo *pCreateInfo,
+    const VkAllocationCallbacks *pAllocator,
+    VkInstance *pInstance)
 {
    VkLayerInstanceCreateInfo *chain_info =
-      get_instance_chain_info(pCreateInfo, VK_LAYER_LINK_INFO);
+       get_instance_chain_info(pCreateInfo, VK_LAYER_LINK_INFO);
 
    std::string engineVersion, engineName;
    enum EngineTypes engine = EngineTypes::UNKNOWN;
-   const char* pEngineName = nullptr;
+   const char *pEngineName = nullptr;
    if (pCreateInfo->pApplicationInfo)
       pEngineName = pCreateInfo->pApplicationInfo->pEngineName;
    if (pEngineName)
@@ -1911,8 +1963,10 @@ static VkResult overlay_CreateInstance(
       engineName = pEngineName;
       global_engine_name = engineName;
    }
-   if (!is_blacklisted(true)) {
-      if (engineName == "DXVK" || engineName == "vkd3d") {
+   if (!is_blacklisted(true))
+   {
+      if (engineName == "DXVK" || engineName == "vkd3d")
+      {
          int engineVer = pCreateInfo->pApplicationInfo->engineVersion;
          engineVersion = to_string(VK_VERSION_MAJOR(engineVer)) + "." + to_string(VK_VERSION_MINOR(engineVer)) + "." + to_string(VK_VERSION_PATCH(engineVer));
       }
@@ -1923,7 +1977,8 @@ static VkResult overlay_CreateInstance(
       else if (engineName == "vkd3d")
          engine = VKD3D;
 
-      else if(engineName == "mesa zink") {
+      else if (engineName == "mesa zink")
+      {
          engine = ZINK;
       }
 
@@ -1939,19 +1994,20 @@ static VkResult overlay_CreateInstance(
 
    assert(chain_info->u.pLayerInfo);
    PFN_vkGetInstanceProcAddr fpGetInstanceProcAddr =
-      chain_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
+       chain_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
    PFN_vkCreateInstance fpCreateInstance =
-      (PFN_vkCreateInstance)fpGetInstanceProcAddr(NULL, "vkCreateInstance");
-   if (fpCreateInstance == NULL) {
+       (PFN_vkCreateInstance)fpGetInstanceProcAddr(NULL, "vkCreateInstance");
+   if (fpCreateInstance == NULL)
+   {
       return VK_ERROR_INITIALIZATION_FAILED;
    }
 
    // Advance the link info for the next element on the chain
    chain_info->u.pLayerInfo = chain_info->u.pLayerInfo->pNext;
 
-
    VkResult result = fpCreateInstance(pCreateInfo, pAllocator, pInstance);
-   if (result != VK_SUCCESS) return result;
+   if (result != VK_SUCCESS)
+      return result;
 
    struct instance_data *instance_data = new_instance_data(*pInstance);
    vk_load_instance_commands(instance_data->instance,
@@ -1966,11 +2022,13 @@ static VkResult overlay_CreateInstance(
    _params = &instance_data->params;
 
    //check for blacklist item in the config file
-   for (auto& item : instance_data->params.blacklist) {
+   for (auto &item : instance_data->params.blacklist)
+   {
       add_blacklist(item);
    }
 
-   if (!is_blacklisted()) {
+   if (!is_blacklisted())
+   {
 #ifdef __linux__
       init_system_info();
       instance_data->notifier.params = &instance_data->params;
@@ -1990,50 +2048,55 @@ static VkResult overlay_CreateInstance(
 }
 
 static VkResult overlay_CreateSampler(
-	VkDevice                     device,
-	const VkSamplerCreateInfo*   pCreateInfo,
-	const VkAllocationCallbacks* pAllocator,
-	VkSampler*                   pSampler)
+    VkDevice device,
+    const VkSamplerCreateInfo *pCreateInfo,
+    const VkAllocationCallbacks *pAllocator,
+    VkSampler *pSampler)
 {
    struct device_data *device_data = FIND(struct device_data, device);
    auto params = device_data->instance->params;
-	VkSamplerCreateInfo sampler = *pCreateInfo;
+   VkSamplerCreateInfo sampler = *pCreateInfo;
 
    if (params.picmip > -17 && params.picmip < 17)
       sampler.mipLodBias = params.picmip;
 
-   if (params.af > 0){
+   if (params.af > 0)
+   {
       sampler.anisotropyEnable = VK_TRUE;
       sampler.maxAnisotropy = params.af;
-   } else if (params.af == 0)
+   }
+   else if (params.af == 0)
       sampler.anisotropyEnable = VK_FALSE;
 
-   if (params.enabled[OVERLAY_PARAM_ENABLED_trilinear]){
+   if (params.enabled[OVERLAY_PARAM_ENABLED_trilinear])
+   {
       sampler.magFilter = VK_FILTER_LINEAR;
       sampler.minFilter = VK_FILTER_LINEAR;
       sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
    }
 
-   if (params.enabled[OVERLAY_PARAM_ENABLED_bicubic]){
+   if (params.enabled[OVERLAY_PARAM_ENABLED_bicubic])
+   {
       sampler.magFilter = VK_FILTER_CUBIC_IMG;
       sampler.minFilter = VK_FILTER_CUBIC_IMG;
       sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
    }
 
-   if (params.enabled[OVERLAY_PARAM_ENABLED_retro]){
+   if (params.enabled[OVERLAY_PARAM_ENABLED_retro])
+   {
       sampler.magFilter = VK_FILTER_NEAREST;
       sampler.minFilter = VK_FILTER_NEAREST;
       sampler.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
    }
 
-	VkResult result = device_data->vtable.CreateSampler(device, &sampler, pAllocator, pSampler);
+   VkResult result = device_data->vtable.CreateSampler(device, &sampler, pAllocator, pSampler);
 
-	return result;
+   return result;
 }
 
 static void overlay_DestroyInstance(
-    VkInstance                                  instance,
-    const VkAllocationCallbacks*                pAllocator)
+    VkInstance instance,
+    const VkAllocationCallbacks *pAllocator)
 {
    struct instance_data *instance_data = FIND(struct instance_data, instance);
    instance_data_map_physical_devices(instance_data, false);
@@ -2047,83 +2110,89 @@ static void overlay_DestroyInstance(
 
 #ifdef VK_USE_PLATFORM_WAYLAND_KHR
 static VkResult overlay_CreateWaylandSurfaceKHR(
-   VkInstance                                  instance,
-   const VkWaylandSurfaceCreateInfoKHR*        pCreateInfo,
-   const VkAllocationCallbacks*                pAllocator,
-   VkSurfaceKHR*                               pSurface
-)
+    VkInstance instance,
+    const VkWaylandSurfaceCreateInfoKHR *pCreateInfo,
+    const VkAllocationCallbacks *pAllocator,
+    VkSurfaceKHR *pSurface)
 {
    VkResult ret;
    struct instance_data *instance_data = FIND(struct instance_data, instance);
    HUDElements.display_server = HUDElements.display_servers::WAYLAND;
    ret = instance_data->vtable.CreateWaylandSurfaceKHR(instance, pCreateInfo, pAllocator, pSurface);
    if (ret == VK_SUCCESS)
-      init_wayland_data(pCreateInfo->display, (void *) *pSurface);
+      init_wayland_data(pCreateInfo->display, (void *)*pSurface);
    return ret;
 }
 
 static void overlay_DestroySurfaceKHR(
-   VkInstance                                  instance,
-   VkSurfaceKHR                                surface,
-   const VkAllocationCallbacks*                pAllocator
-)
+    VkInstance instance,
+    VkSurfaceKHR surface,
+    const VkAllocationCallbacks *pAllocator)
 {
    struct instance_data *instance_data = FIND(struct instance_data, instance);
 
-   wayland_data_unref(NULL, (void *) surface);
+   wayland_data_unref(NULL, (void *)surface);
    instance_data->vtable.DestroySurfaceKHR(instance, surface, pAllocator);
 }
 #endif
 
 extern "C" VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL overlay_GetDeviceProcAddr(VkDevice dev,
-                                                                             const char *funcName);
+                                                                                              const char *funcName);
 extern "C" VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL overlay_GetInstanceProcAddr(VkInstance instance,
-                                                                               const char *funcName);
+                                                                                                const char *funcName);
 
-static const struct {
+static const struct
+{
    const char *name;
    void *ptr;
 } name_to_funcptr_map[] = {
-   { "vkGetInstanceProcAddr", (void *) overlay_GetInstanceProcAddr },
-   { "vkGetDeviceProcAddr", (void *) overlay_GetDeviceProcAddr },
-#define ADD_HOOK(fn) { "vk" # fn, (void *) overlay_ ## fn }
-#define ADD_ALIAS_HOOK(alias, fn) { "vk" # alias, (void *) overlay_ ## fn }
-   ADD_HOOK(AllocateCommandBuffers),
-   ADD_HOOK(FreeCommandBuffers),
-   ADD_HOOK(ResetCommandBuffer),
-   ADD_HOOK(BeginCommandBuffer),
-   ADD_HOOK(EndCommandBuffer),
-   ADD_HOOK(CmdExecuteCommands),
+    {"vkGetInstanceProcAddr", (void *)overlay_GetInstanceProcAddr},
+    {"vkGetDeviceProcAddr", (void *)overlay_GetDeviceProcAddr},
+#define ADD_HOOK(fn)                 \
+   {                                 \
+      "vk" #fn, (void *)overlay_##fn \
+   }
+#define ADD_ALIAS_HOOK(alias, fn)       \
+   {                                    \
+      "vk" #alias, (void *)overlay_##fn \
+   }
+    ADD_HOOK(AllocateCommandBuffers),
+    ADD_HOOK(FreeCommandBuffers),
+    ADD_HOOK(ResetCommandBuffer),
+    ADD_HOOK(BeginCommandBuffer),
+    ADD_HOOK(EndCommandBuffer),
+    ADD_HOOK(CmdExecuteCommands),
 
 #ifdef VK_USE_PLATFORM_WAYLAND_KHR
-   ADD_HOOK(CreateWaylandSurfaceKHR),
-   ADD_HOOK(DestroySurfaceKHR),
+    ADD_HOOK(CreateWaylandSurfaceKHR),
+    ADD_HOOK(DestroySurfaceKHR),
 #endif
-   ADD_HOOK(CreateSwapchainKHR),
-   ADD_HOOK(QueuePresentKHR),
-   ADD_HOOK(DestroySwapchainKHR),
-   ADD_HOOK(CreateSampler),
+    ADD_HOOK(CreateSwapchainKHR),
+    ADD_HOOK(QueuePresentKHR),
+    ADD_HOOK(DestroySwapchainKHR),
+    ADD_HOOK(CreateSampler),
 
-   ADD_HOOK(QueueSubmit),
+    ADD_HOOK(QueueSubmit),
 
-   ADD_HOOK(CreateDevice),
-   ADD_HOOK(DestroyDevice),
+    ADD_HOOK(CreateDevice),
+    ADD_HOOK(DestroyDevice),
 
-   ADD_HOOK(CreateInstance),
-   ADD_HOOK(DestroyInstance),
+    ADD_HOOK(CreateInstance),
+    ADD_HOOK(DestroyInstance),
 #undef ADD_HOOK
 };
 
 static void *find_ptr(const char *name)
 {
-    std::string f(name);
+   std::string f(name);
 
-    if (is_blacklisted() && (f != "vkCreateInstance" && f != "vkDestroyInstance" && f != "vkCreateDevice" && f != "vkDestroyDevice"))
-    {
-        return NULL;
-    }
+   if (is_blacklisted() && (f != "vkCreateInstance" && f != "vkDestroyInstance" && f != "vkCreateDevice" && f != "vkDestroyDevice"))
+   {
+      return NULL;
+   }
 
-   for (uint32_t i = 0; i < ARRAY_SIZE(name_to_funcptr_map); i++) {
+   for (uint32_t i = 0; i < ARRAY_SIZE(name_to_funcptr_map); i++)
+   {
       if (strcmp(name, name_to_funcptr_map[i].name) == 0)
          return name_to_funcptr_map[i].ptr;
    }
@@ -2132,29 +2201,35 @@ static void *find_ptr(const char *name)
 }
 
 extern "C" VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL overlay_GetDeviceProcAddr(VkDevice dev,
-                                                                             const char *funcName)
+                                                                                              const char *funcName)
 {
    init_spdlog();
    void *ptr = find_ptr(funcName);
-   if (ptr) return reinterpret_cast<PFN_vkVoidFunction>(ptr);
+   if (ptr)
+      return reinterpret_cast<PFN_vkVoidFunction>(ptr);
 
-   if (dev == NULL) return NULL;
+   if (dev == NULL)
+      return NULL;
 
    struct device_data *device_data = FIND(struct device_data, dev);
-   if (device_data->vtable.GetDeviceProcAddr == NULL) return NULL;
+   if (device_data->vtable.GetDeviceProcAddr == NULL)
+      return NULL;
    return device_data->vtable.GetDeviceProcAddr(dev, funcName);
 }
 
 extern "C" VK_LAYER_EXPORT VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL overlay_GetInstanceProcAddr(VkInstance instance,
-                                                                               const char *funcName)
+                                                                                                const char *funcName)
 {
    init_spdlog();
    void *ptr = find_ptr(funcName);
-   if (ptr) return reinterpret_cast<PFN_vkVoidFunction>(ptr);
+   if (ptr)
+      return reinterpret_cast<PFN_vkVoidFunction>(ptr);
 
-   if (instance == NULL) return NULL;
+   if (instance == NULL)
+      return NULL;
 
    struct instance_data *instance_data = FIND(struct instance_data, instance);
-   if (instance_data->vtable.GetInstanceProcAddr == NULL) return NULL;
+   if (instance_data->vtable.GetInstanceProcAddr == NULL)
+      return NULL;
    return instance_data->vtable.GetInstanceProcAddr(instance, funcName);
 }
