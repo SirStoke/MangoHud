@@ -392,62 +392,66 @@ void overlay_end_frame()
 void position_layer(struct swapchain_stats &data, const struct overlay_params &params, const ImVec2 &window_size)
 {
    unsigned width = ImGui::GetIO().DisplaySize.x;
-   unsigned height = ImGui::GetIO().DisplaySize.y;
+   //unsigned height = ImGui::GetIO().DisplaySize.y;
    float margin = 10.0f;
    if (params.offset_x > 0 || params.offset_y > 0 || params.enabled[OVERLAY_PARAM_ENABLED_hud_no_margin])
       margin = 0.0f;
 
    ImGui::SetNextWindowBgAlpha(params.background_alpha);
    ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
-   switch (params.position)
-   {
-   case LAYER_POSITION_TOP_LEFT:
-      data.main_window_pos = ImVec2(margin + params.offset_x, margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_TOP_RIGHT:
-      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_MIDDLE_LEFT:
-      data.main_window_pos = ImVec2(margin + params.offset_x, height / 2 - window_size.y / 2 - margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_MIDDLE_RIGHT:
-      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, height / 2 - window_size.y / 2 - margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_BOTTOM_LEFT:
-      data.main_window_pos = ImVec2(margin + params.offset_x, height - window_size.y - margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_BOTTOM_RIGHT:
-      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, height - window_size.y - margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_TOP_CENTER:
-      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
-      {
-         float content_width = (params.table_columns * 64);
-         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) - content_width, margin + params.offset_y);
-      }
-      else
-         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2), margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_BOTTOM_CENTER:
-      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
-      {
-         float content_width = (params.table_columns * 64);
-         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) - content_width, height - window_size.y - margin + params.offset_y);
-      }
-      else
-         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2), height - window_size.y - margin + params.offset_y);
-      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-      break;
-   case LAYER_POSITION_COUNT:
-      break;
-   }
+
+   data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, margin + params.offset_y);
+   ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+
+   //   switch (params.position)
+   //   {
+   //   case LAYER_POSITION_TOP_LEFT:
+   //      data.main_window_pos = ImVec2(margin + params.offset_x, margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_TOP_RIGHT:
+   //      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_MIDDLE_LEFT:
+   //      data.main_window_pos = ImVec2(margin + params.offset_x, height / 2 - window_size.y / 2 - margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_MIDDLE_RIGHT:
+   //      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, height / 2 - window_size.y / 2 - margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_BOTTOM_LEFT:
+   //      data.main_window_pos = ImVec2(margin + params.offset_x, height - window_size.y - margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_BOTTOM_RIGHT:
+   //      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, height - window_size.y - margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_TOP_CENTER:
+   //      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
+   //      {
+   //         float content_width = (params.table_columns * 64);
+   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) - content_width, margin + params.offset_y);
+   //      }
+   //      else
+   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2), margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_BOTTOM_CENTER:
+   //      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
+   //      {
+   //         float content_width = (params.table_columns * 64);
+   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) - content_width, height - window_size.y - margin + params.offset_y);
+   //      }
+   //      else
+   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2), height - window_size.y - margin + params.offset_y);
+   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+   //      break;
+   //   case LAYER_POSITION_COUNT:
+   //      break;
+   //   }
 }
 
 void RenderOutlinedText(const char *text, ImU32 textColor)
@@ -591,6 +595,11 @@ void render_mpris_metadata(const struct overlay_params &params, mutexed_metadata
    }
 }
 #endif
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 static void render_benchmark(swapchain_stats &data, const struct overlay_params &params, const ImVec2 &window_size, unsigned height, Clock::time_point now)
 {
@@ -769,7 +778,6 @@ void render_imgui(swapchain_stats &data, struct overlay_params &params, ImVec2 &
 
    if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal])
       table_flags = ImGuiTableFlags_NoClip | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoHostExtendX;
-
    if (!params.no_display && !steam_focused && params.table_columns)
    {
       ImGui::Begin("Main", &gui_open, ImGuiWindowFlags_NoDecoration);
@@ -779,34 +787,21 @@ void render_imgui(swapchain_stats &data, struct overlay_params &params, ImVec2 &
          for (auto &func : HUDElements.ordered_functions)
          {
             ImGui::Button("HELLO1");
+            ImGui::Image(params.texture_id, ImVec2(140, 168));
             if (!params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && func.name != "exec")
                ImGui::TableNextRow();
             func.run();
             HUDElements.place += 1;
-            if (!HUDElements.ordered_functions.empty() && params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && HUDElements.ordered_functions.size() != (size_t)HUDElements.place)
-               horizontal_separator(params);
          }
 
-         if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal])
-         {
-            if (HUDElements.table_columns_count > 0 && HUDElements.table_columns_count < 65)
-               params.table_columns = HUDElements.table_columns_count;
-            if (!params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
-            {
-               float content_width = ImGui::GetContentRegionAvail().x - (params.table_columns * 64);
-               window_size = ImVec2(content_width, params.height);
-            }
-         }
          ImGui::EndTable();
          HUDElements.table_columns_count = 0;
       }
 
-      if (logger->is_active())
-         ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(data.main_window_pos.x + window_size.x - 15, data.main_window_pos.y + 15), 10, params.engine_color, 20);
       window_size = ImVec2(window_size.x, ImGui::GetCursorPosY() + 10.0f);
       ImGui::End();
-      if ((now - logger->last_log_end()) < 12s && !logger->is_active())
-         render_benchmark(data, params, window_size, height, now);
+      //if ((now - logger->last_log_end()) < 12s && !logger->is_active())
+      //render_benchmark(data, params, window_size, height, now);
    }
 }
 
@@ -995,3 +990,5 @@ void next_hud_position(struct overlay_params &params)
       params.position = static_cast<overlay_param_position>(0);
    }
 }
+
+#pragma GCC diagnostic pop

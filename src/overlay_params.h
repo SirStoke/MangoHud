@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <condition_variable>
 #include <mutex>
+#include <imgui.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -368,6 +369,7 @@ extern "C"
       std::vector<std::string> network;
       std::vector<unsigned> gpu_list;
       int transfer_function;
+      ImTextureID texture_id;
 
       struct fex_stats_options
       {

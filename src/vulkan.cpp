@@ -200,8 +200,8 @@ struct swapchain_data
 
    /**/
    ImGuiContext *imgui_context;
-   ImFontAtlas *font_atlas;
    ImVec2 window_size;
+   ImFontAtlas *font_atlas;
 
    VkDescriptorSet image_desc_set;
 
@@ -304,6 +304,7 @@ static struct instance_data *new_instance_data(VkInstance instance)
    struct instance_data *data = new instance_data();
    data->instance = instance;
    data->params = {};
+   data->params.texture_id = NULL;
    data->params.control = -1;
    data->control_client = -1;
    map_object(HKEY(data->instance), data);
@@ -532,6 +533,11 @@ static void compute_swapchain_display(struct swapchain_data *data)
    if (instance_data->params.no_display)
       return;
 
+   if (instance_data->params.texture_id == NULL)
+   {
+      instance_data->params.texture_id = (ImTextureID)data->image_desc_set;
+   }
+
    ImGui::SetCurrentContext(data->imgui_context);
    if (HUDElements.colors.update)
       HUDElements.convert_colors(instance_data->params);
@@ -699,7 +705,7 @@ static void create_image(struct swapchain_data *data,
                          VkFormat format,
                          VkImage &image,
                          VkDeviceMemory &image_mem,
-                         VkImageView &image_view)
+                         VkImageView &image_view, bool is_font)
 {
    struct device_data *device_data = data->device;
 
@@ -745,6 +751,20 @@ static void create_image(struct swapchain_data *data,
    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
    view_info.subresourceRange.levelCount = 1;
    view_info.subresourceRange.layerCount = 1;
+
+   // If the image is a font, the format is just R8_UNORM, so we need
+   // to treat the R channel as alpha.
+   //
+   // This used to be done in the frag shader, but of course we need all 4
+   // channels there if we want to display images as well (which we do)
+   if (is_font)
+   {
+      view_info.components = {VK_COMPONENT_SWIZZLE_ONE,
+                              VK_COMPONENT_SWIZZLE_ONE,
+                              VK_COMPONENT_SWIZZLE_ONE,
+                              VK_COMPONENT_SWIZZLE_R};
+   }
+
    VK_CHECK(device_data->vtable.CreateImageView(device_data->device, &view_info,
                                                 NULL, &image_view));
 
@@ -772,7 +792,7 @@ static VkDescriptorSet create_image_with_desc(struct swapchain_data *data,
                                                        &alloc_info,
                                                        &descriptor_set));
 
-   create_image(data, descriptor_set, width, height, format, image, image_mem, image_view);
+   create_image(data, descriptor_set, width, height, format, image, image_mem, image_view, true);
    return descriptor_set;
 }
 
@@ -799,7 +819,7 @@ static VkDescriptorSet create_test_image_with_desc(struct swapchain_data *data,
                                                        &descriptor_set));
    SPDLOG_DEBUG("Allocated descriptor sets");
 
-   create_image(data, descriptor_set, width, height, format, image, image_mem, image_view);
+   create_image(data, descriptor_set, width, height, format, image, image_mem, image_view, false);
    return descriptor_set;
 }
 
@@ -823,7 +843,7 @@ static void check_fonts(struct swapchain_data *data)
       shutdown_swapchain_font(data);
 
       if (desc_set)
-         create_image(data, desc_set, width, height, VK_FORMAT_R8_UNORM, data->font_image, data->font_mem, data->font_image_view);
+         create_image(data, desc_set, width, height, VK_FORMAT_R8_UNORM, data->font_image, data->font_mem, data->font_image_view, true);
       else
          desc_set = create_image_with_desc(data, width, height, VK_FORMAT_R8_UNORM, data->font_image, data->font_mem, data->font_image_view);
 
@@ -1097,8 +1117,8 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
          scissor.extent.width = (uint32_t)(pcmd->ClipRect.z - pcmd->ClipRect.x);
          scissor.extent.height = (uint32_t)(pcmd->ClipRect.w - pcmd->ClipRect.y + 1); // FIXME: Why +1 here?
          device_data->vtable.CmdSetScissor(draw->command_buffer, 0, 1, &scissor);
-#if 0 //enable if using >1 font textures or use texture array
-         VkDescriptorSet desc_set[1] = { (VkDescriptorSet)pcmd->TextureId };
+#if 1 //enable if using >1 font textures or use texture array
+         VkDescriptorSet desc_set[1] = {(VkDescriptorSet)pcmd->TextureId};
          device_data->vtable.CmdBindDescriptorSets(draw->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                                    data->pipeline_layout, 0, 1, desc_set, 0, NULL);
 #endif
