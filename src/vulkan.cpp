@@ -59,6 +59,8 @@
 #include <dlfcn.h>
 #include "implot.h"
 #endif
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
 
 using namespace std;
 
@@ -167,6 +169,10 @@ struct swapchain_data
    VkDescriptorSetLayout descriptor_layout;
    VkDescriptorSet descriptor_set;
 
+   VkDescriptorPool test_descriptor_pool;
+   VkDescriptorSetLayout test_descriptor_layout;
+   VkDescriptorSet test_descriptor_set;
+
    VkSampler font_sampler;
 
    VkPipelineLayout pipeline_layout;
@@ -177,18 +183,47 @@ struct swapchain_data
    std::list<overlay_draw *> draws; /* List of struct overlay_draw */
 
    bool font_uploaded;
+   bool image_uploaded;
    VkImage font_image;
    VkImageView font_image_view;
    VkDeviceMemory font_mem;
+
+   VkImage test_image;
+   VkImageView test_image_view;
+   VkDeviceMemory test_mem;
+
    VkBuffer upload_font_buffer;
    VkDeviceMemory upload_font_buffer_mem;
+
+   VkBuffer upload_image_buffer;
+   VkDeviceMemory upload_image_buffer_mem;
 
    /**/
    ImGuiContext *imgui_context;
    ImFontAtlas *font_atlas;
    ImVec2 window_size;
 
+   VkDescriptorSet image_desc_set;
+
    struct swapchain_stats sw_stats;
+};
+
+struct MinionTextureData
+{
+   VkDescriptorSet DS; // Descriptor set: this is what you'll pass to Image()
+   int Width;
+   int Height;
+   int Channels;
+
+   // Need to keep track of these to properly cleanup
+   VkImageView ImageView;
+   VkImage Image;
+   VkDeviceMemory ImageMemory;
+   VkSampler Sampler;
+   VkBuffer UploadBuffer;
+   VkDeviceMemory UploadBufferMemory;
+
+   MinionTextureData() { memset(this, 0, sizeof(*this)); }
 };
 
 // single global lock, for simplicity
@@ -560,35 +595,46 @@ static void upload_image_data(struct device_data *device_data,
    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
    VK_CHECK(device_data->vtable.CreateBuffer(device_data->device, &buffer_info,
                                              NULL, &upload_buffer));
+
+   SPDLOG_DEBUG("CreateBuffer");
    VkMemoryRequirements upload_buffer_req;
    device_data->vtable.GetBufferMemoryRequirements(device_data->device,
                                                    upload_buffer,
                                                    &upload_buffer_req);
+   SPDLOG_DEBUG("GetBufferMemoryRequirements");
+
    VkMemoryAllocateInfo upload_alloc_info = {};
    upload_alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
    upload_alloc_info.allocationSize = upload_buffer_req.size;
    upload_alloc_info.memoryTypeIndex = vk_memory_type(device_data,
                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                                       upload_buffer_req.memoryTypeBits);
+
    VK_CHECK(device_data->vtable.AllocateMemory(device_data->device,
                                                &upload_alloc_info,
                                                NULL,
                                                &upload_buffer_mem));
+
+   SPDLOG_DEBUG("AllocateMemory {} bytes", upload_alloc_info.allocationSize);
+
    VK_CHECK(device_data->vtable.BindBufferMemory(device_data->device,
                                                  upload_buffer,
                                                  upload_buffer_mem, 0));
+   SPDLOG_DEBUG("BindBufferMemory");
 
    /* Upload to Buffer */
    char *map = NULL;
    VK_CHECK(device_data->vtable.MapMemory(device_data->device,
                                           upload_buffer_mem,
                                           0, upload_size, 0, (void **)(&map)));
+   SPDLOG_DEBUG("MapMemory");
    memcpy(map, pixels, upload_size);
    VkMappedMemoryRange range[1] = {};
    range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
    range[0].memory = upload_buffer_mem;
    range[0].size = upload_size;
    VK_CHECK(device_data->vtable.FlushMappedMemoryRanges(device_data->device, 1, range));
+   SPDLOG_DEBUG("FlushMappedMemoryRanges");
    device_data->vtable.UnmapMemory(device_data->device,
                                    upload_buffer_mem);
 
@@ -610,6 +656,7 @@ static void upload_image_data(struct device_data *device_data,
                                           0, 0, NULL, 0, NULL,
                                           1, copy_barrier);
 
+   SPDLOG_DEBUG("CmdPipelineBarrier");
    VkBufferImageCopy region = {};
    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
    region.imageSubresource.layerCount = 1;
@@ -622,6 +669,7 @@ static void upload_image_data(struct device_data *device_data,
                                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                             1, &region);
 
+   SPDLOG_DEBUG("CmdCopyBufferToImage");
    VkImageMemoryBarrier use_barrier[1] = {};
    use_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
    use_barrier[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -641,6 +689,7 @@ static void upload_image_data(struct device_data *device_data,
                                           0, NULL,
                                           0, NULL,
                                           1, use_barrier);
+   SPDLOG_DEBUG("CmdPipelineBarrier");
 }
 
 static void create_image(struct swapchain_data *data,
@@ -679,6 +728,8 @@ static void create_image(struct swapchain_data *data,
    image_alloc_info.memoryTypeIndex = vk_memory_type(device_data,
                                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                                      font_image_req.memoryTypeBits);
+
+   SPDLOG_DEBUG("Allocating {} bytes, {}x{}", font_image_req.size, width, height);
    VK_CHECK(device_data->vtable.AllocateMemory(device_data->device, &image_alloc_info,
                                                NULL, &image_mem));
    VK_CHECK(device_data->vtable.BindImageMemory(device_data->device,
@@ -725,6 +776,33 @@ static VkDescriptorSet create_image_with_desc(struct swapchain_data *data,
    return descriptor_set;
 }
 
+static VkDescriptorSet create_test_image_with_desc(struct swapchain_data *data,
+                                                   uint32_t width,
+                                                   uint32_t height,
+                                                   VkFormat format,
+                                                   VkImage &image,
+                                                   VkDeviceMemory &image_mem,
+                                                   VkImageView &image_view)
+{
+   struct device_data *device_data = data->device;
+
+   VkDescriptorSet descriptor_set{};
+
+   VkDescriptorSetAllocateInfo alloc_info{};
+   alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+   alloc_info.descriptorPool = data->test_descriptor_pool;
+   alloc_info.descriptorSetCount = 1;
+   alloc_info.pSetLayouts = &data->test_descriptor_layout;
+   SPDLOG_DEBUG("Allocating descriptor sets");
+   VK_CHECK(device_data->vtable.AllocateDescriptorSets(device_data->device,
+                                                       &alloc_info,
+                                                       &descriptor_set));
+   SPDLOG_DEBUG("Allocated descriptor sets");
+
+   create_image(data, descriptor_set, width, height, format, image, image_mem, image_view);
+   return descriptor_set;
+}
+
 static void check_fonts(struct swapchain_data *data)
 {
    struct device_data *device_data = data->device;
@@ -754,6 +832,43 @@ static void check_fonts(struct swapchain_data *data)
       data->sw_stats.font_params_hash = params.font_params_hash;
       SPDLOG_DEBUG("Default font tex size: {}x{}px", width, height);
    }
+}
+
+static void load_test_image(struct swapchain_data *data,
+                            VkCommandBuffer command_buffer)
+{
+   if (data->image_uploaded)
+      return;
+
+   struct device_data *device_data = data->device;
+
+   MinionTextureData tex_data;
+   VkDescriptorSet desc_set;
+   const char *filename = "/home/sandro/src/MangoHud/data/images/murlocs-apm-2.png";
+
+   tex_data.Channels = 4;
+
+   unsigned char *image_data = stbi_load(filename, &tex_data.Width, &tex_data.Height, 0, tex_data.Channels);
+
+   if (image_data == NULL)
+   {
+      SPDLOG_ERROR("Could not load overlay images, check they are present in the data folder");
+
+      return;
+   }
+
+   desc_set = create_test_image_with_desc(data, tex_data.Width, tex_data.Height, VK_FORMAT_R8G8B8A8_UNORM, data->test_image, data->test_mem, data->test_image_view);
+
+   data->image_uploaded = true;
+   size_t upload_size = tex_data.Width * tex_data.Height * tex_data.Channels * sizeof(char);
+
+   SPDLOG_DEBUG("Uploading Image data, {} bytes", upload_size);
+
+   upload_image_data(device_data, command_buffer, image_data, upload_size, tex_data.Width, tex_data.Height, data->upload_image_buffer, data->upload_image_buffer_mem, data->test_image);
+
+   SPDLOG_DEBUG("Image data uploaded");
+
+   data->image_desc_set = desc_set;
 }
 
 static void ensure_swapchain_fonts(struct swapchain_data *data,
@@ -840,6 +955,8 @@ static struct overlay_draw *render_swapchain_display(struct swapchain_data *data
    device_data->vtable.BeginCommandBuffer(draw->command_buffer, &buffer_begin_info);
 
    ensure_swapchain_fonts(data, draw->command_buffer);
+   SPDLOG_DEBUG("Fonts loaded");
+   load_test_image(data, draw->command_buffer);
 
    /* Bounce the image to display back to color attachment layout for
     * rendering on top of it.
@@ -1129,6 +1246,10 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
                                                      &desc_pool_info,
                                                      NULL, &data->descriptor_pool));
 
+   VK_CHECK(device_data->vtable.CreateDescriptorPool(device_data->device,
+                                                     &desc_pool_info,
+                                                     NULL, &data->test_descriptor_pool));
+
    /* Descriptor layout */
    VkSampler sampler[1] = {data->font_sampler};
    VkDescriptorSetLayoutBinding binding[1] = {};
@@ -1143,6 +1264,10 @@ static void setup_swapchain_data_pipeline(struct swapchain_data *data)
    VK_CHECK(device_data->vtable.CreateDescriptorSetLayout(device_data->device,
                                                           &set_layout_info,
                                                           NULL, &data->descriptor_layout));
+
+   VK_CHECK(device_data->vtable.CreateDescriptorSetLayout(device_data->device,
+                                                          &set_layout_info,
+                                                          NULL, &data->test_descriptor_layout));
 
    /* Descriptor set */
    /*
