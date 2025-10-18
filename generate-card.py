@@ -3,10 +3,11 @@ from io import BytesIO
 import requests
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import math
+import argparse
 
-PORTRAIT_URL = "https://art.hearthstonejson.com/v1/256x/BGS_104.webp"
-BORDER_URL   = "https://static.hsreplay.net/static/webpack/assets/images/minions/border.5715229ec663177ce8f9.png"
-TIER_URL     = "https://static.hsreplay.net/static/webpack/assets/images/battlegrounds/tavern-tiers/5.7c89576b8a39923564e8.png"
+PORTRAIT_DEFAULT = "https://art.hearthstonejson.com/v1/256x/BGS_104.webp"
+BORDER_DEFAULT   = "https://static.hsreplay.net/static/webpack/assets/images/minions/border.5715229ec663177ce8f9.png"
+TIER_DEFAULT     = "https://static.hsreplay.net/static/webpack/assets/images/battlegrounds/tavern-tiers/5.7c89576b8a39923564e8.png"
 
 CARD_W, CARD_H = 140, 168
 
@@ -40,9 +41,9 @@ def _load_font(sz: int) -> ImageFont.FreeTypeFont:
 def render_minion(
     atk: str = "4",
     hp: str = "4",
-    portrait_url: str = PORTRAIT_URL,
-    border_url: str = BORDER_URL,
-    tier_url: str = TIER_URL,
+    portrait_url: str = PORTRAIT_DEFAULT,
+    border_url: str = BORDER_DEFAULT,
+    tier_url: str = TIER_DEFAULT,
     out_path: str = "minion.png",
 ):
     full_border = _fetch_image(border_url)
@@ -137,6 +138,32 @@ def render_minion(
     canvas.save(out_path, "PNG")
     print(f"✅ Rendered {out_path}")
 
-if __name__ == "__main__":
-    render_minion(atk="4", hp="4", out_path="minion.png")
+# ---- CLI ----
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        description="Render a Battlegrounds-style minion card."
+    )
+    p.add_argument("--output", "-o", default="minion.png", help="Output file path (PNG).")
+    p.add_argument("--portrait", "-p", default=PORTRAIT_DEFAULT, help="Portrait URL or local path.")
+    p.add_argument("--border", "-b", default=BORDER_DEFAULT, help="Border URL or local path.")
+    p.add_argument("--tier", "-t", default=TIER_DEFAULT, help="Tier icon URL or local path.")
+    p.add_argument("--atk", default="4", help="Attack value text.")
+    p.add_argument("--hp", default="4", help="Health value text.")
+    return p.parse_args(argv)
 
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
+
+    render_minion(
+        atk=args.atk,
+        hp=args.hp,
+        portrait_url=args.portrait,
+        border_url=args.border,
+        tier_url=args.tier,
+        out_path=args.output,
+    )
+
+
+if __name__ == "__main__":
+    main()
