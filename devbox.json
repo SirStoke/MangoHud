@@ -20,7 +20,10 @@
     "pkgsi686Linux.libxkbcommon",
     "python312Packages.requests@latest",
     "python312Packages.pillow@latest",
-    "python312@latest"
+    "python312@latest",
+    "nodejs@latest",
+    "gdb@latest",
+    "clang-tools@latest"
   ],
   "shell": {
     "init_hook": [],
