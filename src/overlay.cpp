@@ -763,7 +763,7 @@ void render_imgui(swapchain_stats &data, struct overlay_params &params, ImVec2 &
    static float ralign_width = 0, old_scale = 0;
    auto io = ImGui::GetIO();
 
-   window_size = ImVec2(params.width, params.height);
+   // window_size = ImVec2(params.width, params.height);
 
    unsigned height = io.DisplaySize.y;
    auto now = Clock::now();
@@ -780,17 +780,17 @@ void render_imgui(swapchain_stats &data, struct overlay_params &params, ImVec2 &
       table_flags = ImGuiTableFlags_NoClip | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoHostExtendX;
    if (!params.no_display && !steam_focused && params.table_columns)
    {
-      ImGui::Begin("Main", &gui_open, ImGuiWindowFlags_NoDecoration);
+      ImGui::Begin("Main", &gui_open, ImGuiWindowFlags_NoDecoration); // NoDecoration eats the scrollbar. We need to change it.
       if (ImGui::BeginTable("hud", params.table_columns, table_flags))
       {
          HUDElements.place = 0;
          for (auto &func : HUDElements.ordered_functions)
          {
+            ImGui::TableNextColumn();
             ImGui::Button("HELLO1");
             ImGui::Image(params.texture_id, ImVec2(140, 168));
             if (!params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && func.name != "exec")
                ImGui::TableNextRow();
-            func.run();
             HUDElements.place += 1;
          }
 
@@ -798,7 +798,7 @@ void render_imgui(swapchain_stats &data, struct overlay_params &params, ImVec2 &
          HUDElements.table_columns_count = 0;
       }
 
-      window_size = ImVec2(window_size.x, ImGui::GetCursorPosY() + 10.0f);
+      //window_size = ImVec2(window_size.x, ImGui::GetCursorPosY() + 10.0f);
       ImGui::End();
       //if ((now - logger->last_log_end()) < 12s && !logger->is_active())
       //render_benchmark(data, params, window_size, height, now);
