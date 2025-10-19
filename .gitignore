@@ -49,3 +49,5 @@ subprojects/cmocka/
 **/GPATH
 **/GRTAGS
 **/GTAGS
+
+demo/build*
