@@ -49,9 +49,61 @@
         }
       }
     },
-    "cmake": {
-      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#cmake",
-      "source": "nixpkg"
+    "cmake@latest": {
+      "last_modified": "2025-10-07T08:41:47Z",
+      "resolved": "github:NixOS/nixpkgs/bce5fe2bb998488d8e7e7856315f90496723793c#cmake",
+      "source": "devbox-search",
+      "version": "4.1.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/7f42ksnx9chv8clzni5k3ym0dp5sk3xq-cmake-4.1.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/7f42ksnx9chv8clzni5k3ym0dp5sk3xq-cmake-4.1.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/h0hdccgw5r28sia1lwaya4hbx10sngqf-cmake-4.1.1",
+              "default": true
+            },
+            {
+              "name": "debug",
+              "path": "/nix/store/4bll6nx3fdscm70jfpcl9d3mzaz6qrq0-cmake-4.1.1-debug"
+            }
+          ],
+          "store_path": "/nix/store/h0hdccgw5r28sia1lwaya4hbx10sngqf-cmake-4.1.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/6cjky7lsm3n9fd1l1yfs084vawf8qs2c-cmake-4.1.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/6cjky7lsm3n9fd1l1yfs084vawf8qs2c-cmake-4.1.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/2lrbixyw95bjg0x1aav648r0h0zsj2jl-cmake-4.1.1",
+              "default": true
+            },
+            {
+              "name": "debug",
+              "path": "/nix/store/8ka255hfrrykda2a7g3k1b9gmyqcvfq3-cmake-4.1.1-debug"
+            }
+          ],
+          "store_path": "/nix/store/2lrbixyw95bjg0x1aav648r0h0zsj2jl-cmake-4.1.1"
+        }
+      }
     },
     "coreutils": {
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#coreutils",
@@ -274,6 +326,10 @@
         }
       }
     },
+    "pkgsi686Linux.glfw": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.glfw",
+      "source": "nixpkg"
+    },
     "pkgsi686Linux.glslang": {
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.glslang",
       "source": "nixpkg"
@@ -290,6 +346,26 @@
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.pkg-config",
       "source": "nixpkg"
     },
+    "pkgsi686Linux.shaderc": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.shaderc",
+      "source": "nixpkg"
+    },
+    "pkgsi686Linux.vulkan-headers": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.vulkan-headers",
+      "source": "nixpkg"
+    },
+    "pkgsi686Linux.vulkan-loader": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.vulkan-loader",
+      "source": "nixpkg"
+    },
+    "pkgsi686Linux.vulkan-tools": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.vulkan-tools",
+      "source": "nixpkg"
+    },
+    "pkgsi686Linux.vulkan-validation-layers": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.vulkan-validation-layers",
+      "source": "nixpkg"
+    },
     "pkgsi686Linux.wayland": {
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.wayland",
       "source": "nixpkg"
@@ -302,8 +378,20 @@
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.xorg.libX11.dev",
       "source": "nixpkg"
     },
+    "pkgsi686Linux.xorg.libXi.dev": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.xorg.libXi.dev",
+      "source": "nixpkg"
+    },
+    "pkgsi686Linux.xorg.libXrandr": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.xorg.libXrandr",
+      "source": "nixpkg"
+    },
     "pkgsi686Linux.xorg.libxcb": {
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.xorg.libxcb",
+      "source": "nixpkg"
+    },
+    "pkgsi686Linux.xorg.xrandr": {
+      "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#pkgsi686Linux.xorg.xrandr",
       "source": "nixpkg"
     },
     "python312@latest": {
@@ -498,6 +586,54 @@
     "stdenv": {
       "resolved": "github:NixOS/nixpkgs/f937f8ecd1c70efd7e9f90ba13dfb400cf559de4?narHash=sha256-4%2FJd%2BLkQ2ssw8luQVkqVs9spDBVE6h%2Fu%2FhC%2FtzngsPo%3D#stdenv",
       "source": "nixpkg"
+    },
+    "wmctrl@latest": {
+      "last_modified": "2025-10-07T08:41:47Z",
+      "resolved": "github:NixOS/nixpkgs/bce5fe2bb998488d8e7e7856315f90496723793c#wmctrl",
+      "source": "devbox-search",
+      "version": "1.07",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/z7i7hgx56ddk4pn9inm2ir559019k3i9-wmctrl-1.07",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/z7i7hgx56ddk4pn9inm2ir559019k3i9-wmctrl-1.07"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/hicwzrq1yc6ir8dpgx9f2661a9hmy663-wmctrl-1.07",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/hicwzrq1yc6ir8dpgx9f2661a9hmy663-wmctrl-1.07"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/g0xgk18fx2i5vljr11kl2ik6jhaxf69v-wmctrl-1.07",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/g0xgk18fx2i5vljr11kl2ik6jhaxf69v-wmctrl-1.07"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/bq26d0sxffz85bfj7b8bc4sy0d1vgb64-wmctrl-1.07",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/bq26d0sxffz85bfj7b8bc4sy0d1vgb64-wmctrl-1.07"
+        }
+      }
     }
   }
 }

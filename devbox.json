@@ -15,7 +15,6 @@
     "pkgsi686Linux.wayland",
     "pkgsi686Linux.xorg.libxcb",
     "python312Packages.pip",
-    "cmake",
     "pkgsi686Linux.pkg-config",
     "pkgsi686Linux.libxkbcommon",
     "python312Packages.requests@latest",
@@ -23,7 +22,18 @@
     "python312@latest",
     "nodejs@latest",
     "gdb@latest",
-    "clang-tools@latest"
+    "clang-tools@latest",
+    "cmake@latest",
+    "pkgsi686Linux.xorg.libXi.dev",
+    "pkgsi686Linux.glfw",
+    "pkgsi686Linux.xorg.xrandr",
+    "pkgsi686Linux.xorg.libXrandr",
+    "wmctrl@latest",
+    "pkgsi686Linux.vulkan-loader",
+    "pkgsi686Linux.vulkan-headers",
+    "pkgsi686Linux.shaderc",
+    "pkgsi686Linux.vulkan-validation-layers",
+    "pkgsi686Linux.vulkan-tools"
   ],
   "shell": {
     "init_hook": [],

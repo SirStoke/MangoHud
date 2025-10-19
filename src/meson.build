@@ -48,6 +48,12 @@ util_files = files(
   'mesa/util/os_time.c',
 )
 
+
+ui_files = files(
+  'ui/io/x11.cpp',
+  'ui/layout.cpp'
+)
+
 vklayer_files = files(
   'hud_elements.cpp',
   'overlay.cpp',
@@ -186,6 +192,7 @@ mangohud_static_lib = static_library(
   files('vulkan.cpp'),
   util_files,
   vk_enum_to_str,
+  ui_files,
   vklayer_files,
   overlay_spv,
   c_args : [
@@ -201,6 +208,7 @@ mangohud_static_lib = static_library(
     mangohud_version_dep,
     vulkan_wsi_deps,
     dearimgui_dep,
+    yoga_dep,
     spdlog_dep,
     dbus_dep,
     dep_dl,
@@ -208,6 +216,8 @@ mangohud_static_lib = static_library(
     dep_pthread,
     dep_vulkan,
     windows_deps,
+    dep_x11,
+    dep_xi,
     implot_dep],
   include_directories : [inc_common],
   link_args : link_args,
@@ -242,6 +252,7 @@ mangohud_opengl_shared_lib = shared_library(
     mangohud_version_dep,
     vulkan_wsi_deps,
     dearimgui_dep,
+    yoga_dep,
     spdlog_dep,
     dbus_dep,
     dep_dl,
@@ -278,6 +289,7 @@ if get_option('mangoapp')
     gnu_symbol_visibility : 'hidden',
     dependencies : [
       dearimgui_dep,
+      yoga_dep,
       dep_dl,
       dep_vulkan,
       spdlog_dep,

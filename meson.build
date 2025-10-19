@@ -90,6 +90,7 @@ vulkan_wsi_deps = []
 
 if is_unixy
   dep_x11 = dependency('x11', required: get_option('with_x11'))
+  dep_xi = dependency('xi', required: get_option('with_x11'))
   dep_wayland_client = dependency('wayland-client',
       required: get_option('with_wayland'), version : '>=1.11')
   dbus_dep = dependency('dbus-1', required: get_option('with_dbus')).partial_dependency(compile_args : true, includes : true)
@@ -97,6 +98,7 @@ if is_unixy
   vulkan_wsi_deps += dep_xkb
 else
   dep_x11 = null_dep
+  dep_xi = null_dep
   dep_wayland_client = null_dep
   dbus_dep = null_dep
 endif
@@ -234,6 +236,14 @@ else
 implot_dep = null_dep
 implot_lib = static_library('nulllib', [])
 endif
+
+cmake = import('cmake')
+
+yoga_cmake = cmake.subproject('yoga')
+yoga_dep = yoga_cmake.dependency('yogacore')
+
+#kcl_cmake = cmake.subproject('kcl')
+#kcl_dep = kcl_cmake.dependency('kclcore')
 
 spdlog_options = [
   'default_library=static',

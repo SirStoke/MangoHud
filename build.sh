@@ -290,7 +290,6 @@ reinstall() {
 
 clean() {
     rm -rf "build"
-    rm -rf subprojects/*/
 }
 
 usage() {

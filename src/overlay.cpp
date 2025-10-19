@@ -1,37 +1,40 @@
-#include <sstream>
-#include <iomanip>
 #include <algorithm>
-#include <thread>
 #include <condition_variable>
-#include <spdlog/spdlog.h>
-#include <spdlog/cfg/env.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/rotating_file_sink.h>
 #include <filesystem.h>
+#include <iomanip>
+#include <spdlog/cfg/env.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
+#include <sstream>
+#include <thread>
 // #include <sys/stat.h>
-#include "overlay.h"
-#include "cpu.h"
-#include "gpu.h"
-#include "memory.h"
-#include "timing.hpp"
-#include "fcat.h"
-#include "mesa/util/macros.h"
-#include "battery.h"
-#include "device.h"
-#include "string_utils.h"
-#include "file_utils.h"
-#include "pci_ids.h"
-#include "iostats.h"
 #include "amdgpu.h"
-#include "fps_metrics.h"
-#include "net.h"
+#include "battery.h"
+#include "cpu.h"
+#include "device.h"
+#include "fcat.h"
 #include "fex.h"
+#include "file_utils.h"
+#include "fps_metrics.h"
 #include "ftrace.h"
+#include "gpu.h"
+#include "imgui.h"
+#include "iostats.h"
+#include "memory.h"
+#include "mesa/util/macros.h"
+#include "net.h"
+#include "overlay.h"
+#include "pci_ids.h"
+#include "string_utils.h"
+#include "timing.hpp"
 
 #ifdef __linux__
 #include <libgen.h>
 #include <unistd.h>
 #endif
+
+#include <yoga/Yoga.h>
 
 namespace fs = ghc::filesystem;
 using namespace std;
@@ -41,13 +44,15 @@ uint32_t deviceID;
 bool gui_open = false;
 bool fcat_open = false;
 struct benchmark_stats benchmark;
-struct fps_limit fps_limit_stats
-{
-};
+struct fps_limit fps_limit_stats{};
 ImVec2 real_font_size;
 std::deque<logData> graph_data;
-const char *engines[] = {"Unknown", "OpenGL", "VULKAN", "DXVK", "VKD3D", "DAMAVAND", "ZINK", "WINED3D", "Feral3D", "ToGL", "GAMESCOPE"};
-const char *engines_short[] = {"Unknown", "OGL", "VK", "DXVK", "VKD3D", "DV", "ZINK", "WD3D", "Feral3D", "ToGL", "GS"};
+const char *engines[] = {"Unknown", "OpenGL",   "VULKAN",   "DXVK",
+                         "VKD3D",   "DAMAVAND", "ZINK",     "WINED3D",
+                         "Feral3D", "ToGL",     "GAMESCOPE"};
+const char *engines_short[] = {"Unknown", "OGL",  "VK",   "DXVK",
+                               "VKD3D",   "DV",   "ZINK", "WD3D",
+                               "Feral3D", "ToGL", "GS"};
 overlay_params *_params{};
 double min_frametime, max_frametime;
 bool gpu_metrics_exists = false;
@@ -58,541 +63,528 @@ fcatoverlay fcatstatus;
 std::string drm_dev;
 int current_preset;
 
-void init_spdlog()
-{
-   if (spdlog::get("MANGOHUD"))
-      return;
+void init_spdlog() {
+  if (spdlog::get("MANGOHUD"))
+    return;
 
-   spdlog::set_default_logger(spdlog::stderr_color_mt("MANGOHUD")); // Just to get the name in log
-   if (getenv("MANGOHUD_USE_LOGFILE"))
-   {
-      try
-      {
-         // Not rotating when opening log as proton/wine create multiple (sub)processes
-         auto log = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(get_config_dir() + "/MangoHud/MangoHud.log", 10 * 1024 * 1024, 5, false);
-         spdlog::get("MANGOHUD")->sinks().push_back(log);
-      }
-      catch (const spdlog::spdlog_ex &ex)
-      {
-         SPDLOG_ERROR("{}", ex.what());
-      }
-   }
+  spdlog::set_default_logger(
+      spdlog::stderr_color_mt("MANGOHUD")); // Just to get the name in log
+  if (getenv("MANGOHUD_USE_LOGFILE")) {
+    try {
+      // Not rotating when opening log as proton/wine create multiple
+      // (sub)processes
+      auto log = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+          get_config_dir() + "/MangoHud/MangoHud.log", 10 * 1024 * 1024, 5,
+          false);
+      spdlog::get("MANGOHUD")->sinks().push_back(log);
+    } catch (const spdlog::spdlog_ex &ex) {
+      SPDLOG_ERROR("{}", ex.what());
+    }
+  }
 #ifdef DEBUG
-   spdlog::set_level(spdlog::level::level_enum::debug);
+  spdlog::set_level(spdlog::level::level_enum::debug);
 #endif
-   spdlog::cfg::load_env_levels();
+  spdlog::cfg::load_env_levels();
 
-   // Use MANGOHUD_LOG_LEVEL to correspond to SPDLOG_LEVEL
-   if (getenv("MANGOHUD_LOG_LEVEL"))
-   {
-      std::string log_level = getenv("MANGOHUD_LOG_LEVEL");
-      vector<string> levels;
-      levels = {"off", "info", "err", "debug"};
-      for (auto &element : levels)
-      {
-         transform(log_level.begin(), log_level.end(), log_level.begin(), ::tolower);
-         if (log_level == element)
-         {
-            spdlog::set_level(spdlog::level::from_str(log_level));
-         }
+  // Use MANGOHUD_LOG_LEVEL to correspond to SPDLOG_LEVEL
+  if (getenv("MANGOHUD_LOG_LEVEL")) {
+    std::string log_level = getenv("MANGOHUD_LOG_LEVEL");
+    vector<string> levels;
+    levels = {"off", "info", "err", "debug"};
+    for (auto &element : levels) {
+      transform(log_level.begin(), log_level.end(), log_level.begin(),
+                ::tolower);
+      if (log_level == element) {
+        spdlog::set_level(spdlog::level::from_str(log_level));
       }
+    }
 #ifndef DEBUG
-   }
-   else
-   {
-      std::string log_level = "info";
-      transform(log_level.begin(), log_level.end(), log_level.begin(), ::tolower);
-      spdlog::set_level(spdlog::level::from_str(log_level));
+  } else {
+    std::string log_level = "info";
+    transform(log_level.begin(), log_level.end(), log_level.begin(), ::tolower);
+    spdlog::set_level(spdlog::level::from_str(log_level));
 #endif
-   }
+  }
 }
 
-void FpsLimiter(struct fps_limit &stats)
-{
-   stats.sleepTime = stats.targetFrameTime - (stats.frameStart - stats.frameEnd);
-   if (stats.sleepTime > stats.frameOverhead)
-   {
-      auto adjustedSleep = stats.sleepTime - stats.frameOverhead;
-      this_thread::sleep_for(adjustedSleep);
-      stats.frameOverhead = ((Clock::now() - stats.frameStart) - adjustedSleep);
-      if (stats.frameOverhead > stats.targetFrameTime / 2)
-         stats.frameOverhead = Clock::duration(0);
-   }
+void FpsLimiter(struct fps_limit &stats) {
+  stats.sleepTime = stats.targetFrameTime - (stats.frameStart - stats.frameEnd);
+  if (stats.sleepTime > stats.frameOverhead) {
+    auto adjustedSleep = stats.sleepTime - stats.frameOverhead;
+    this_thread::sleep_for(adjustedSleep);
+    stats.frameOverhead = ((Clock::now() - stats.frameStart) - adjustedSleep);
+    if (stats.frameOverhead > stats.targetFrameTime / 2)
+      stats.frameOverhead = Clock::duration(0);
+  }
 }
 
-void update_hw_info(const struct overlay_params &params, uint32_t vendorID)
-{
-   if (params.enabled[OVERLAY_PARAM_ENABLED_fan])
-      update_fan();
-   if (params.enabled[OVERLAY_PARAM_ENABLED_cpu_stats] || logger->is_active())
-   {
-      cpuStats.UpdateCPUData();
+void update_hw_info(const struct overlay_params &params, uint32_t vendorID) {
+  if (params.enabled[OVERLAY_PARAM_ENABLED_fan])
+    update_fan();
+  if (params.enabled[OVERLAY_PARAM_ENABLED_cpu_stats] || logger->is_active()) {
+    cpuStats.UpdateCPUData();
 
 #ifdef __linux__
-      if (params.enabled[OVERLAY_PARAM_ENABLED_core_load] || params.enabled[OVERLAY_PARAM_ENABLED_cpu_mhz] || logger->is_active())
-         cpuStats.UpdateCoreMhz();
-      if (params.enabled[OVERLAY_PARAM_ENABLED_cpu_temp] || logger->is_active() || params.enabled[OVERLAY_PARAM_ENABLED_graphs])
-         cpuStats.UpdateCpuTemp();
-      if (params.enabled[OVERLAY_PARAM_ENABLED_cpu_power] || logger->is_active())
-         cpuStats.UpdateCpuPower();
+    if (params.enabled[OVERLAY_PARAM_ENABLED_core_load] ||
+        params.enabled[OVERLAY_PARAM_ENABLED_cpu_mhz] || logger->is_active())
+      cpuStats.UpdateCoreMhz();
+    if (params.enabled[OVERLAY_PARAM_ENABLED_cpu_temp] || logger->is_active() ||
+        params.enabled[OVERLAY_PARAM_ENABLED_graphs])
+      cpuStats.UpdateCpuTemp();
+    if (params.enabled[OVERLAY_PARAM_ENABLED_cpu_power] || logger->is_active())
+      cpuStats.UpdateCpuPower();
 #endif
-   }
-   if (params.enabled[OVERLAY_PARAM_ENABLED_gpu_stats] || logger->is_active())
-   {
-      if (gpus)
-         gpus->get_metrics();
-   }
+  }
+  if (params.enabled[OVERLAY_PARAM_ENABLED_gpu_stats] || logger->is_active()) {
+    if (gpus)
+      gpus->get_metrics();
+  }
 
 #ifdef __linux__
-   if (params.enabled[OVERLAY_PARAM_ENABLED_battery])
-      Battery_Stats.update();
-   if (!params.device_battery.empty())
-   {
-      device_update(params);
-      if (device_found)
-      {
-         device_info();
-      }
-   }
-   if (params.enabled[OVERLAY_PARAM_ENABLED_ram] || params.enabled[OVERLAY_PARAM_ENABLED_swap] || logger->is_active())
-      update_meminfo();
-   if (params.enabled[OVERLAY_PARAM_ENABLED_procmem])
-      update_procmem();
-   if (params.enabled[OVERLAY_PARAM_ENABLED_io_read] || params.enabled[OVERLAY_PARAM_ENABLED_io_write])
-      getIoStats(g_io_stats);
+  if (params.enabled[OVERLAY_PARAM_ENABLED_battery])
+    Battery_Stats.update();
+  if (!params.device_battery.empty()) {
+    device_update(params);
+    if (device_found) {
+      device_info();
+    }
+  }
+  if (params.enabled[OVERLAY_PARAM_ENABLED_ram] ||
+      params.enabled[OVERLAY_PARAM_ENABLED_swap] || logger->is_active())
+    update_meminfo();
+  if (params.enabled[OVERLAY_PARAM_ENABLED_procmem])
+    update_procmem();
+  if (params.enabled[OVERLAY_PARAM_ENABLED_io_read] ||
+      params.enabled[OVERLAY_PARAM_ENABLED_io_write])
+    getIoStats(g_io_stats);
 #endif
-   if (gpus && gpus->active_gpu())
-   {
-      currentLogData.gpu_load = gpus->active_gpu()->metrics.load;
-      currentLogData.gpu_temp = gpus->active_gpu()->metrics.temp;
-      currentLogData.gpu_core_clock = gpus->active_gpu()->metrics.CoreClock;
-      currentLogData.gpu_mem_clock = gpus->active_gpu()->metrics.MemClock;
-      currentLogData.gpu_vram_used = gpus->active_gpu()->metrics.sys_vram_used;
-      currentLogData.gpu_power = gpus->active_gpu()->metrics.powerUsage;
-   }
+  if (gpus && gpus->active_gpu()) {
+    currentLogData.gpu_load = gpus->active_gpu()->metrics.load;
+    currentLogData.gpu_temp = gpus->active_gpu()->metrics.temp;
+    currentLogData.gpu_core_clock = gpus->active_gpu()->metrics.CoreClock;
+    currentLogData.gpu_mem_clock = gpus->active_gpu()->metrics.MemClock;
+    currentLogData.gpu_vram_used = gpus->active_gpu()->metrics.sys_vram_used;
+    currentLogData.gpu_power = gpus->active_gpu()->metrics.powerUsage;
+  }
 #ifdef __linux__
-   currentLogData.ram_used = memused;
-   currentLogData.swap_used = swapused;
-   currentLogData.process_rss = proc_mem_resident / float((2 << 29)); // GiB, consistent w/ other mem stats
+  currentLogData.ram_used = memused;
+  currentLogData.swap_used = swapused;
+  currentLogData.process_rss =
+      proc_mem_resident /
+      float((2 << 29)); // GiB, consistent w/ other mem stats
 #endif
 
-   currentLogData.cpu_load = cpuStats.GetCPUDataTotal().percent;
-   currentLogData.cpu_temp = cpuStats.GetCPUDataTotal().temp;
-   currentLogData.cpu_power = cpuStats.GetCPUDataTotal().power;
-   currentLogData.cpu_mhz = cpuStats.GetCPUDataTotal().cpu_mhz;
+  currentLogData.cpu_load = cpuStats.GetCPUDataTotal().percent;
+  currentLogData.cpu_temp = cpuStats.GetCPUDataTotal().temp;
+  currentLogData.cpu_power = cpuStats.GetCPUDataTotal().power;
+  currentLogData.cpu_mhz = cpuStats.GetCPUDataTotal().cpu_mhz;
 
-   // Save data for graphs
-   if (graph_data.size() >= kMaxGraphEntries)
-      graph_data.pop_front();
-   graph_data.push_back(currentLogData);
-   if (logger)
-      logger->notify_data_valid();
-   HUDElements.update_exec();
+  // Save data for graphs
+  if (graph_data.size() >= kMaxGraphEntries)
+    graph_data.pop_front();
+  graph_data.push_back(currentLogData);
+  if (logger)
+    logger->notify_data_valid();
+  HUDElements.update_exec();
 }
 
-struct hw_info_updater
-{
-   bool quit = false;
-   std::thread thread{};
-   const struct overlay_params *params = nullptr;
-   uint32_t vendorID;
-   bool update_hw_info_thread = false;
+struct hw_info_updater {
+  bool quit = false;
+  std::thread thread{};
+  const struct overlay_params *params = nullptr;
+  uint32_t vendorID;
+  bool update_hw_info_thread = false;
 
-   std::condition_variable cv_hwupdate;
-   std::mutex m_cv_hwupdate, m_hw_updating;
+  std::condition_variable cv_hwupdate;
+  std::mutex m_cv_hwupdate, m_hw_updating;
 
-   hw_info_updater()
-   {
-      thread = std::thread(&hw_info_updater::run, this);
-      // Anything longer than this wouldn't fit in the 15 byte limit
-      pthread_setname_np(thread.native_handle(), "mangohud-hwinfo");
-   }
+  hw_info_updater() {
+    thread = std::thread(&hw_info_updater::run, this);
+    // Anything longer than this wouldn't fit in the 15 byte limit
+    pthread_setname_np(thread.native_handle(), "mangohud-hwinfo");
+  }
 
-   ~hw_info_updater()
-   {
-      quit = true;
+  ~hw_info_updater() {
+    quit = true;
+    cv_hwupdate.notify_all();
+    if (thread.joinable())
+      thread.join();
+  }
+
+  void update(const struct overlay_params *params_, uint32_t vendorID_) {
+    std::unique_lock<std::mutex> lk_hw_updating(m_hw_updating,
+                                                std::try_to_lock);
+    if (lk_hw_updating.owns_lock()) {
+      params = params_;
+      vendorID = vendorID_;
+      update_hw_info_thread = true;
       cv_hwupdate.notify_all();
-      if (thread.joinable())
-         thread.join();
-   }
+    }
+  }
 
-   void update(const struct overlay_params *params_, uint32_t vendorID_)
-   {
-      std::unique_lock<std::mutex> lk_hw_updating(m_hw_updating, std::try_to_lock);
-      if (lk_hw_updating.owns_lock())
-      {
-         params = params_;
-         vendorID = vendorID_;
-         update_hw_info_thread = true;
-         cv_hwupdate.notify_all();
+  void run() {
+    while (!quit) {
+      std::unique_lock<std::mutex> lk_cv_hwupdate(m_cv_hwupdate);
+      cv_hwupdate.wait(lk_cv_hwupdate,
+                       [&] { return update_hw_info_thread || quit; });
+      if (quit)
+        break;
+
+      if (params) {
+        std::unique_lock<std::mutex> lk_hw_updating(m_hw_updating);
+        update_hw_info(*params, vendorID);
       }
-   }
-
-   void run()
-   {
-      while (!quit)
-      {
-         std::unique_lock<std::mutex> lk_cv_hwupdate(m_cv_hwupdate);
-         cv_hwupdate.wait(lk_cv_hwupdate, [&]
-                          { return update_hw_info_thread || quit; });
-         if (quit)
-            break;
-
-         if (params)
-         {
-            std::unique_lock<std::mutex> lk_hw_updating(m_hw_updating);
-            update_hw_info(*params, vendorID);
-         }
-         update_hw_info_thread = false;
-      }
-   }
+      update_hw_info_thread = false;
+    }
+  }
 };
 
 static std::unique_ptr<hw_info_updater> hw_update_thread;
 
-void stop_hw_updater()
-{
-   if (hw_update_thread)
-      hw_update_thread.reset();
+void stop_hw_updater() {
+  if (hw_update_thread)
+    hw_update_thread.reset();
 }
 
-void update_hud_info_with_frametime(struct swapchain_stats &sw_stats, const struct overlay_params &params, uint32_t vendorID, uint64_t frametime_ns)
-{
-   uint32_t f_idx = sw_stats.n_frames % ARRAY_SIZE(sw_stats.frames_stats);
-   uint64_t now = os_time_get_nano();             /* ns */
-   auto elapsed = now - sw_stats.last_fps_update; /* ns */
-   float frametime_ms = frametime_ns / 1000000.f;
+void update_hud_info_with_frametime(struct swapchain_stats &sw_stats,
+                                    const struct overlay_params &params,
+                                    uint32_t vendorID, uint64_t frametime_ns) {
+  uint32_t f_idx = sw_stats.n_frames % ARRAY_SIZE(sw_stats.frames_stats);
+  uint64_t now = os_time_get_nano();             /* ns */
+  auto elapsed = now - sw_stats.last_fps_update; /* ns */
+  float frametime_ms = frametime_ns / 1000000.f;
 
-   if (sw_stats.last_present_time)
-   {
-      sw_stats.frames_stats[f_idx].stats[OVERLAY_PLOTS_frame_timing] =
-          frametime_ns;
-      frametime_data.push_back(frametime_ms);
-      frametime_data.erase(frametime_data.begin());
-   }
+  if (sw_stats.last_present_time) {
+    sw_stats.frames_stats[f_idx].stats[OVERLAY_PLOTS_frame_timing] =
+        frametime_ns;
+    frametime_data.push_back(frametime_ms);
+    frametime_data.erase(frametime_data.begin());
+  }
 #ifdef __linux__
-   if (gpus)
-      gpus->update_throttling();
+  if (gpus)
+    gpus->update_throttling();
 #endif
 #ifdef HAVE_FEX
-   fex::update_fex_stats();
+  fex::update_fex_stats();
 #endif
 #ifdef HAVE_FTRACE
-   if (params.ftrace.enabled)
-   {
-      if (!FTrace::object)
-         FTrace::object = std::make_unique<FTrace::FTrace>(params.ftrace);
-      FTrace::object->update();
-   }
+  if (params.ftrace.enabled) {
+    if (!FTrace::object)
+      FTrace::object = std::make_unique<FTrace::FTrace>(params.ftrace);
+    FTrace::object->update();
+  }
 #endif
-   frametime = frametime_ms;
-   fps = double(1000 / frametime_ms);
-   if (fpsmetrics)
-      fpsmetrics->update(frametime_ms);
+  frametime = frametime_ms;
+  fps = double(1000 / frametime_ms);
+  if (fpsmetrics)
+    fpsmetrics->update(frametime_ms);
 
-   if (elapsed >= params.fps_sampling_period)
-   {
-      if (!hw_update_thread)
-         hw_update_thread = std::make_unique<hw_info_updater>();
-      hw_update_thread->update(&params, vendorID);
+  if (elapsed >= params.fps_sampling_period) {
+    if (!hw_update_thread)
+      hw_update_thread = std::make_unique<hw_info_updater>();
+    hw_update_thread->update(&params, vendorID);
 
-      if (fpsmetrics)
-         fpsmetrics->update_thread();
+    if (fpsmetrics)
+      fpsmetrics->update_thread();
 #ifdef __linux__
-      if (HUDElements.net)
-         HUDElements.net->update();
+    if (HUDElements.net)
+      HUDElements.net->update();
 #endif
 
-      sw_stats.fps = 1000000000.0 * sw_stats.n_frames_since_update / elapsed;
+    sw_stats.fps = 1000000000.0 * sw_stats.n_frames_since_update / elapsed;
 
-      if (params.enabled[OVERLAY_PARAM_ENABLED_time])
-      {
-         std::time_t t = std::time(nullptr);
-         std::stringstream time;
-         time << std::put_time(std::localtime(&t), params.time_format.c_str());
-         sw_stats.time = time.str();
+    if (params.enabled[OVERLAY_PARAM_ENABLED_time]) {
+      std::time_t t = std::time(nullptr);
+      std::stringstream time;
+      time << std::put_time(std::localtime(&t), params.time_format.c_str());
+      sw_stats.time = time.str();
+    }
+
+    if (params.autostart_log && logger && !logger->autostart_init) {
+      if ((std::chrono::steady_clock::now() - HUDElements.overlay_start) >
+          std::chrono::seconds(params.autostart_log)) {
+        logger->start_logging();
+        logger->autostart_init = true;
       }
+    }
 
-      if (params.autostart_log && logger && !logger->autostart_init)
-      {
-         if ((std::chrono::steady_clock::now() - HUDElements.overlay_start) > std::chrono::seconds(params.autostart_log))
-         {
-            logger->start_logging();
-            logger->autostart_init = true;
-         }
-      }
+    sw_stats.n_frames_since_update = 0;
+    sw_stats.last_fps_update = now;
+  }
+  auto min = std::min_element(frametime_data.begin(), frametime_data.end());
+  auto max = std::max_element(frametime_data.begin(), frametime_data.end());
+  min_frametime = min[0];
+  max_frametime = max[0];
+  // double min_time = UINT64_MAX, max_time = 0;
+  // for (auto& stat : sw_stats.frames_stats ){
+  //    min_time = MIN2(stat.stats[0], min_time);
+  //    max_time = MAX2(stat.stats[0], min_time);
+  // }
+  // min_frametime = min_time / sw_stats.time_dividor;
+  // max_frametime = max_time / sw_stats.time_dividor;
+  if (params.log_interval == 0) {
+    logger->try_log();
+  }
 
-      sw_stats.n_frames_since_update = 0;
-      sw_stats.last_fps_update = now;
-   }
-   auto min = std::min_element(frametime_data.begin(), frametime_data.end());
-   auto max = std::max_element(frametime_data.begin(), frametime_data.end());
-   min_frametime = min[0];
-   max_frametime = max[0];
-   // double min_time = UINT64_MAX, max_time = 0;
-   // for (auto& stat : sw_stats.frames_stats ){
-   //    min_time = MIN2(stat.stats[0], min_time);
-   //    max_time = MAX2(stat.stats[0], min_time);
-   // }
-   // min_frametime = min_time / sw_stats.time_dividor;
-   // max_frametime = max_time / sw_stats.time_dividor;
-   if (params.log_interval == 0)
-   {
-      logger->try_log();
-   }
-
-   sw_stats.last_present_time = now;
-   sw_stats.n_frames++;
-   sw_stats.n_frames_since_update++;
+  sw_stats.last_present_time = now;
+  sw_stats.n_frames++;
+  sw_stats.n_frames_since_update++;
 }
 
-void update_hud_info(struct swapchain_stats &sw_stats, const struct overlay_params &params, uint32_t vendorID)
-{
-   uint64_t now = os_time_get_nano(); /* ns */
-   uint64_t frametime_ns = now - sw_stats.last_present_time;
-   if (!params.no_display || logger->is_active())
-      update_hud_info_with_frametime(sw_stats, params, vendorID, frametime_ns);
+void update_hud_info(struct swapchain_stats &sw_stats,
+                     const struct overlay_params &params, uint32_t vendorID) {
+  uint64_t now = os_time_get_nano(); /* ns */
+  uint64_t frametime_ns = now - sw_stats.last_present_time;
+  if (!params.no_display || logger->is_active())
+    update_hud_info_with_frametime(sw_stats, params, vendorID, frametime_ns);
 }
 
-float get_time_stat(void *_data, int _idx)
-{
-   struct swapchain_stats *data = (struct swapchain_stats *)_data;
-   if ((ARRAY_SIZE(data->frames_stats) - _idx) > data->n_frames)
-      return 0.0f;
-   int idx = ARRAY_SIZE(data->frames_stats) +
-                         data->n_frames <
-                     ARRAY_SIZE(data->frames_stats)
-                 ? _idx - data->n_frames
-                 : _idx + data->n_frames;
-   idx %= ARRAY_SIZE(data->frames_stats);
-   /* Time stats are in us. */
-   return data->frames_stats[idx].stats[data->stat_selector] / data->time_dividor;
+float get_time_stat(void *_data, int _idx) {
+  struct swapchain_stats *data = (struct swapchain_stats *)_data;
+  if ((ARRAY_SIZE(data->frames_stats) - _idx) > data->n_frames)
+    return 0.0f;
+  int idx = ARRAY_SIZE(data->frames_stats) + data->n_frames <
+                    ARRAY_SIZE(data->frames_stats)
+                ? _idx - data->n_frames
+                : _idx + data->n_frames;
+  idx %= ARRAY_SIZE(data->frames_stats);
+  /* Time stats are in us. */
+  return data->frames_stats[idx].stats[data->stat_selector] /
+         data->time_dividor;
 }
 
-void overlay_new_frame(const struct overlay_params &params)
-{
-   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, -3));
-   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, params.alpha);
-   if (!params.enabled[OVERLAY_PARAM_ENABLED_hud_compact])
-   {
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
-   }
-   else
-   {
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-   }
+void overlay_new_frame(const struct overlay_params &params) {
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, -3));
+  ImGui::PushStyleVar(ImGuiStyleVar_Alpha, params.alpha);
+  if (!params.enabled[OVERLAY_PARAM_ENABLED_hud_compact]) {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
+  } else {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+  }
 }
 
-void overlay_end_frame()
-{
-   ImGui::PopStyleVar(4);
+void overlay_end_frame() { ImGui::PopStyleVar(4); }
+
+void position_layer(struct swapchain_stats &data,
+                    const struct overlay_params &params,
+                    const ImVec2 &window_size) {
+  unsigned width = ImGui::GetIO().DisplaySize.x;
+  // unsigned height = ImGui::GetIO().DisplaySize.y;
+  float margin = 10.0f;
+  if (params.offset_x > 0 || params.offset_y > 0 ||
+      params.enabled[OVERLAY_PARAM_ENABLED_hud_no_margin])
+    margin = 0.0f;
+
+  ImGui::SetNextWindowBgAlpha(params.background_alpha);
+  ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
+
+  data.main_window_pos =
+      ImVec2(width - window_size.x - margin + params.offset_x,
+             margin + params.offset_y);
+  ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+
+  //   switch (params.position)
+  //   {
+  //   case LAYER_POSITION_TOP_LEFT:
+  //      data.main_window_pos = ImVec2(margin + params.offset_x, margin +
+  //      params.offset_y); ImGui::SetNextWindowPos(data.main_window_pos,
+  //      ImGuiCond_Always); break;
+  //   case LAYER_POSITION_TOP_RIGHT:
+  //      data.main_window_pos = ImVec2(width - window_size.x - margin +
+  //      params.offset_x, margin + params.offset_y);
+  //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  //      break;
+  //   case LAYER_POSITION_MIDDLE_LEFT:
+  //      data.main_window_pos = ImVec2(margin + params.offset_x, height / 2 -
+  //      window_size.y / 2 - margin + params.offset_y);
+  //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  //      break;
+  //   case LAYER_POSITION_MIDDLE_RIGHT:
+  //      data.main_window_pos = ImVec2(width - window_size.x - margin +
+  //      params.offset_x, height / 2 - window_size.y / 2 - margin +
+  //      params.offset_y); ImGui::SetNextWindowPos(data.main_window_pos,
+  //      ImGuiCond_Always); break;
+  //   case LAYER_POSITION_BOTTOM_LEFT:
+  //      data.main_window_pos = ImVec2(margin + params.offset_x, height -
+  //      window_size.y - margin + params.offset_y);
+  //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  //      break;
+  //   case LAYER_POSITION_BOTTOM_RIGHT:
+  //      data.main_window_pos = ImVec2(width - window_size.x - margin +
+  //      params.offset_x, height - window_size.y - margin + params.offset_y);
+  //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  //      break;
+  //   case LAYER_POSITION_TOP_CENTER:
+  //      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] &&
+  //      !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
+  //      {
+  //         float content_width = (params.table_columns * 64);
+  //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) -
+  //         content_width, margin + params.offset_y);
+  //      }
+  //      else
+  //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2),
+  //         margin + params.offset_y);
+  //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  //      break;
+  //   case LAYER_POSITION_BOTTOM_CENTER:
+  //      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] &&
+  //      !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
+  //      {
+  //         float content_width = (params.table_columns * 64);
+  //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) -
+  //         content_width, height - window_size.y - margin + params.offset_y);
+  //      }
+  //      else
+  //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2),
+  //         height - window_size.y - margin + params.offset_y);
+  //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  //      break;
+  //   case LAYER_POSITION_COUNT:
+  //      break;
+  //   }
 }
 
-void position_layer(struct swapchain_stats &data, const struct overlay_params &params, const ImVec2 &window_size)
-{
-   unsigned width = ImGui::GetIO().DisplaySize.x;
-   //unsigned height = ImGui::GetIO().DisplaySize.y;
-   float margin = 10.0f;
-   if (params.offset_x > 0 || params.offset_y > 0 || params.enabled[OVERLAY_PARAM_ENABLED_hud_no_margin])
-      margin = 0.0f;
+void RenderOutlinedText(const char *text, ImU32 textColor) {
+  ImGuiWindow *window = ImGui::GetCurrentWindow();
+  ImGuiContext &g = *GImGui;
+  const ImGuiStyle &style = g.Style;
 
-   ImGui::SetNextWindowBgAlpha(params.background_alpha);
-   ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
+  float outlineThickness = HUDElements.params->text_outline_thickness;
+  ImVec2 textSize = ImGui::CalcTextSize(text);
+  ImU32 outlineColor =
+      ImGui::ColorConvertFloat4ToU32(HUDElements.colors.text_outline);
+  ImVec2 pos = window->DC.CursorPos;
 
-   data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, margin + params.offset_y);
-   ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
+  ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-   //   switch (params.position)
-   //   {
-   //   case LAYER_POSITION_TOP_LEFT:
-   //      data.main_window_pos = ImVec2(margin + params.offset_x, margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_TOP_RIGHT:
-   //      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_MIDDLE_LEFT:
-   //      data.main_window_pos = ImVec2(margin + params.offset_x, height / 2 - window_size.y / 2 - margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_MIDDLE_RIGHT:
-   //      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, height / 2 - window_size.y / 2 - margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_BOTTOM_LEFT:
-   //      data.main_window_pos = ImVec2(margin + params.offset_x, height - window_size.y - margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_BOTTOM_RIGHT:
-   //      data.main_window_pos = ImVec2(width - window_size.x - margin + params.offset_x, height - window_size.y - margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_TOP_CENTER:
-   //      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
-   //      {
-   //         float content_width = (params.table_columns * 64);
-   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) - content_width, margin + params.offset_y);
-   //      }
-   //      else
-   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2), margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_BOTTOM_CENTER:
-   //      if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && !params.enabled[OVERLAY_PARAM_ENABLED_horizontal_stretch])
-   //      {
-   //         float content_width = (params.table_columns * 64);
-   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2) - content_width, height - window_size.y - margin + params.offset_y);
-   //      }
-   //      else
-   //         data.main_window_pos = ImVec2((width / 2) - (window_size.x / 2), height - window_size.y - margin + params.offset_y);
-   //      ImGui::SetNextWindowPos(data.main_window_pos, ImGuiCond_Always);
-   //      break;
-   //   case LAYER_POSITION_COUNT:
-   //      break;
-   //   }
+  if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_text_outline] &&
+      outlineThickness > 0.0f) {
+    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                      ImVec2(pos.x - outlineThickness, pos.y), outlineColor,
+                      text);
+    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                      ImVec2(pos.x + outlineThickness, pos.y), outlineColor,
+                      text);
+    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                      ImVec2(pos.x, pos.y - outlineThickness), outlineColor,
+                      text);
+    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                      ImVec2(pos.x, pos.y + outlineThickness), outlineColor,
+                      text);
+  }
+
+  drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), pos, textColor,
+                    text);
+
+  ImGui::ItemSize(textSize, style.FramePadding.y);
 }
 
-void RenderOutlinedText(const char *text, ImU32 textColor)
-{
-   ImGuiWindow *window = ImGui::GetCurrentWindow();
-   ImGuiContext &g = *GImGui;
-   const ImGuiStyle &style = g.Style;
+void right_aligned_text(ImVec4 &col, float off_x, const char *fmt, ...) {
+  ImVec2 pos = ImGui::GetCursorPos();
+  char buffer[32]{};
 
-   float outlineThickness = HUDElements.params->text_outline_thickness;
-   ImVec2 textSize = ImGui::CalcTextSize(text);
-   ImU32 outlineColor = ImGui::ColorConvertFloat4ToU32(HUDElements.colors.text_outline);
-   ImVec2 pos = window->DC.CursorPos;
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buffer, sizeof(buffer), fmt, args);
+  va_end(args);
 
-   ImDrawList *drawList = ImGui::GetWindowDrawList();
-
-   if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_text_outline] && outlineThickness > 0.0f)
-   {
-      drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(pos.x - outlineThickness, pos.y), outlineColor, text);
-      drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(pos.x + outlineThickness, pos.y), outlineColor, text);
-      drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(pos.x, pos.y - outlineThickness), outlineColor, text);
-      drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), ImVec2(pos.x, pos.y + outlineThickness), outlineColor, text);
-   }
-
-   drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), pos, textColor, text);
-
-   ImGui::ItemSize(textSize, style.FramePadding.y);
+  if (!HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_hud_compact]) {
+    ImVec2 sz = ImGui::CalcTextSize(buffer);
+    ImGui::SetCursorPosX(pos.x + off_x - sz.x);
+  }
+  RenderOutlinedText(buffer, ImGui::ColorConvertFloat4ToU32(col));
+  // ImGui::TextColored(col,"%s", buffer);
 }
 
-void right_aligned_text(ImVec4 &col, float off_x, const char *fmt, ...)
-{
-   ImVec2 pos = ImGui::GetCursorPos();
-   char buffer[32]{};
-
-   va_list args;
-   va_start(args, fmt);
-   vsnprintf(buffer, sizeof(buffer), fmt, args);
-   va_end(args);
-
-   if (!HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_hud_compact])
-   {
-      ImVec2 sz = ImGui::CalcTextSize(buffer);
-      ImGui::SetCursorPosX(pos.x + off_x - sz.x);
-   }
-   RenderOutlinedText(buffer, ImGui::ColorConvertFloat4ToU32(col));
-   // ImGui::TextColored(col,"%s", buffer);
-}
-
-void center_text(const std::string &text)
-{
-   ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) - (ImGui::CalcTextSize(text.c_str()).x / 2));
+void center_text(const std::string &text) {
+  ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) -
+                       (ImGui::CalcTextSize(text.c_str()).x / 2));
 }
 
 #ifdef HAVE_DBUS
-static float get_ticker_limited_pos(float pos, float tw, float &left_limit, float &right_limit)
-{
-   //float cw = ImGui::GetContentRegionAvailWidth() * 3; // only table cell worth of width
-   float cw = ImGui::GetWindowContentRegionMax().x - ImGui::GetStyle().WindowPadding.x;
-   float new_pos_x = ImGui::GetCursorPosX();
-   left_limit = cw - tw + new_pos_x;
-   right_limit = new_pos_x;
+static float get_ticker_limited_pos(float pos, float tw, float &left_limit,
+                                    float &right_limit) {
+  // float cw = ImGui::GetContentRegionAvailWidth() * 3; // only table cell
+  // worth of width
+  float cw =
+      ImGui::GetWindowContentRegionMax().x - ImGui::GetStyle().WindowPadding.x;
+  float new_pos_x = ImGui::GetCursorPosX();
+  left_limit = cw - tw + new_pos_x;
+  right_limit = new_pos_x;
 
-   if (cw < tw)
-   {
-      new_pos_x += pos;
-      // acts as a delay before it starts scrolling again
-      if (new_pos_x < left_limit)
-         return left_limit;
-      else if (new_pos_x > right_limit)
-         return right_limit;
-      else
-         return new_pos_x;
-   }
-   return new_pos_x;
+  if (cw < tw) {
+    new_pos_x += pos;
+    // acts as a delay before it starts scrolling again
+    if (new_pos_x < left_limit)
+      return left_limit;
+    else if (new_pos_x > right_limit)
+      return right_limit;
+    else
+      return new_pos_x;
+  }
+  return new_pos_x;
 }
 
-void render_mpris_metadata(const struct overlay_params &params, mutexed_metadata &meta, uint64_t frame_timing)
-{
-   static const float overflow = 50.f /* 3333ms * 0.5 / 16.6667 / 2 (to edge and back) */;
+void render_mpris_metadata(const struct overlay_params &params,
+                           mutexed_metadata &meta, uint64_t frame_timing) {
+  static const float overflow =
+      50.f /* 3333ms * 0.5 / 16.6667 / 2 (to edge and back) */;
 
-   if (meta.meta.valid)
-   {
-      auto color = ImGui::ColorConvertU32ToFloat4(params.media_player_color);
-      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 0));
+  if (meta.meta.valid) {
+    auto color = ImGui::ColorConvertU32ToFloat4(params.media_player_color);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 0));
 
-      if (!params.enabled[OVERLAY_PARAM_ENABLED_horizontal])
-      {
-         ImGui::Dummy(ImVec2(0.0f, 20.0f));
+    if (!params.enabled[OVERLAY_PARAM_ENABLED_horizontal]) {
+      ImGui::Dummy(ImVec2(0.0f, 20.0f));
+    }
+
+    if (meta.ticker.needs_recalc) {
+      meta.ticker.formatted.clear();
+      meta.ticker.longest = 0;
+      for (const auto &f : params.media_player_format) {
+        std::string str;
+        try {
+          str = fmt::format(f, fmt::arg("artist", meta.meta.artists),
+                            fmt::arg("title", meta.meta.title),
+                            fmt::arg("album", meta.meta.album));
+        } catch (const fmt::format_error &err) {
+          SPDLOG_ERROR("formatting error in '{}': {}", f, err.what());
+        }
+        float w = ImGui::CalcTextSize(str.c_str()).x;
+        meta.ticker.longest = std::max(meta.ticker.longest, w);
+        meta.ticker.formatted.push_back({str, w});
       }
+      meta.ticker.needs_recalc = false;
+    }
 
-      if (meta.ticker.needs_recalc)
-      {
-         meta.ticker.formatted.clear();
-         meta.ticker.longest = 0;
-         for (const auto &f : params.media_player_format)
-         {
-            std::string str;
-            try
-            {
-               str = fmt::format(f,
-                                 fmt::arg("artist", meta.meta.artists),
-                                 fmt::arg("title", meta.meta.title),
-                                 fmt::arg("album", meta.meta.album));
-            }
-            catch (const fmt::format_error &err)
-            {
-               SPDLOG_ERROR("formatting error in '{}': {}", f, err.what());
-            }
-            float w = ImGui::CalcTextSize(str.c_str()).x;
-            meta.ticker.longest = std::max(meta.ticker.longest, w);
-            meta.ticker.formatted.push_back({str, w});
-         }
-         meta.ticker.needs_recalc = false;
-      }
+    float new_pos, left_limit = 0, right_limit = 0;
+    get_ticker_limited_pos(meta.ticker.pos, meta.ticker.longest, left_limit,
+                           right_limit);
 
-      float new_pos, left_limit = 0, right_limit = 0;
-      get_ticker_limited_pos(meta.ticker.pos, meta.ticker.longest, left_limit, right_limit);
+    if (meta.ticker.pos < left_limit - overflow * .5f) {
+      meta.ticker.dir = -1;
+      meta.ticker.pos = (left_limit - overflow * .5f) + 1.f /* random */;
+    } else if (meta.ticker.pos > right_limit + overflow) {
+      meta.ticker.dir = 1;
+      meta.ticker.pos = (right_limit + overflow) - 1.f /* random */;
+    }
 
-      if (meta.ticker.pos < left_limit - overflow * .5f)
-      {
-         meta.ticker.dir = -1;
-         meta.ticker.pos = (left_limit - overflow * .5f) + 1.f /* random */;
-      }
-      else if (meta.ticker.pos > right_limit + overflow)
-      {
-         meta.ticker.dir = 1;
-         meta.ticker.pos = (right_limit + overflow) - 1.f /* random */;
-      }
+    meta.ticker.pos -=
+        .5f * (frame_timing / 16666666.7f /* ns */) * meta.ticker.dir;
 
-      meta.ticker.pos -= .5f * (frame_timing / 16666666.7f /* ns */) * meta.ticker.dir;
+    for (const auto &fmt : meta.ticker.formatted) {
+      if (fmt.text.empty())
+        continue;
+      new_pos = get_ticker_limited_pos(meta.ticker.pos, fmt.width, left_limit,
+                                       right_limit);
+      ImGui::SetCursorPosX(new_pos);
+      HUDElements.TextColored(color, "%s", fmt.text.c_str());
+    }
 
-      for (const auto &fmt : meta.ticker.formatted)
-      {
-         if (fmt.text.empty())
-            continue;
-         new_pos = get_ticker_limited_pos(meta.ticker.pos, fmt.width, left_limit, right_limit);
-         ImGui::SetCursorPosX(new_pos);
-         HUDElements.TextColored(color, "%s", fmt.text.c_str());
-      }
-
-      ImGui::PopStyleVar();
-   }
+    ImGui::PopStyleVar();
+  }
 }
 #endif
 
@@ -601,394 +593,404 @@ void render_mpris_metadata(const struct overlay_params &params, mutexed_metadata
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
-static void render_benchmark(swapchain_stats &data, const struct overlay_params &params, const ImVec2 &window_size, unsigned height, Clock::time_point now)
-{
-   // TODO, FIX LOG_DURATION FOR BENCHMARK
-   int benchHeight = (2 + benchmark.percentile_data.size()) * real_font_size.x + 10.0f + 58;
-   ImGui::SetNextWindowSize(ImVec2(window_size.x, benchHeight), ImGuiCond_Always);
-   if (height - (window_size.y + data.main_window_pos.y + 5) < benchHeight)
-      ImGui::SetNextWindowPos(ImVec2(data.main_window_pos.x, data.main_window_pos.y - benchHeight - 5), ImGuiCond_Always);
-   else
-      ImGui::SetNextWindowPos(ImVec2(data.main_window_pos.x, data.main_window_pos.y + window_size.y + 5), ImGuiCond_Always);
+static void render_benchmark(swapchain_stats &data,
+                             const struct overlay_params &params,
+                             const ImVec2 &window_size, unsigned height,
+                             Clock::time_point now) {
+  // TODO, FIX LOG_DURATION FOR BENCHMARK
+  int benchHeight =
+      (2 + benchmark.percentile_data.size()) * real_font_size.x + 10.0f + 58;
+  ImGui::SetNextWindowSize(ImVec2(window_size.x, benchHeight),
+                           ImGuiCond_Always);
+  if (height - (window_size.y + data.main_window_pos.y + 5) < benchHeight)
+    ImGui::SetNextWindowPos(ImVec2(data.main_window_pos.x,
+                                   data.main_window_pos.y - benchHeight - 5),
+                            ImGuiCond_Always);
+  else
+    ImGui::SetNextWindowPos(ImVec2(data.main_window_pos.x,
+                                   data.main_window_pos.y + window_size.y + 5),
+                            ImGuiCond_Always);
 #ifdef MANGOAPP
-   ImGui::SetNextWindowPos(ImVec2(data.main_window_pos.x, data.main_window_pos.y + window_size.y + 5), ImGuiCond_Always);
+  ImGui::SetNextWindowPos(ImVec2(data.main_window_pos.x,
+                                 data.main_window_pos.y + window_size.y + 5),
+                          ImGuiCond_Always);
 #endif
-   float display_time = std::chrono::duration<float>(now - logger->last_log_end()).count();
-   static float display_for = 10.0f;
-   float alpha;
-   if (params.background_alpha != 0)
-   {
-      if (display_for >= display_time)
-      {
-         alpha = display_time * params.background_alpha;
-         if (alpha >= params.background_alpha)
-         {
-            ImGui::SetNextWindowBgAlpha(params.background_alpha);
-         }
-         else
-         {
-            ImGui::SetNextWindowBgAlpha(alpha);
-         }
+  float display_time =
+      std::chrono::duration<float>(now - logger->last_log_end()).count();
+  static float display_for = 10.0f;
+  float alpha;
+  if (params.background_alpha != 0) {
+    if (display_for >= display_time) {
+      alpha = display_time * params.background_alpha;
+      if (alpha >= params.background_alpha) {
+        ImGui::SetNextWindowBgAlpha(params.background_alpha);
+      } else {
+        ImGui::SetNextWindowBgAlpha(alpha);
       }
-      else
-      {
-         alpha = 6.0 - display_time * params.background_alpha;
-         if (alpha >= params.background_alpha)
-         {
-            ImGui::SetNextWindowBgAlpha(params.background_alpha);
-         }
-         else
-         {
-            ImGui::SetNextWindowBgAlpha(alpha);
-         }
+    } else {
+      alpha = 6.0 - display_time * params.background_alpha;
+      if (alpha >= params.background_alpha) {
+        ImGui::SetNextWindowBgAlpha(params.background_alpha);
+      } else {
+        ImGui::SetNextWindowBgAlpha(alpha);
       }
-   }
-   else
-   {
-      if (display_for >= display_time)
-      {
-         alpha = display_time * 0.0001;
-         ImGui::SetNextWindowBgAlpha(params.background_alpha);
-      }
-      else
-      {
-         alpha = 6.0 - display_time * 0.0001;
-         ImGui::SetNextWindowBgAlpha(params.background_alpha);
-      }
-   }
+    }
+  } else {
+    if (display_for >= display_time) {
+      alpha = display_time * 0.0001;
+      ImGui::SetNextWindowBgAlpha(params.background_alpha);
+    } else {
+      alpha = 6.0 - display_time * 0.0001;
+      ImGui::SetNextWindowBgAlpha(params.background_alpha);
+    }
+  }
 
-   ImGui::Begin("Benchmark", &gui_open, ImGuiWindowFlags_NoDecoration);
-   static const char *finished = "Logging Finished";
-   ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) - (ImGui::CalcTextSize(finished).x / 2));
-   ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, alpha / params.background_alpha), "%s", finished);
-   ImGui::Dummy(ImVec2(0.0f, 8.0f));
+  ImGui::Begin("Benchmark", &gui_open, ImGuiWindowFlags_NoDecoration);
+  static const char *finished = "Logging Finished";
+  ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) -
+                       (ImGui::CalcTextSize(finished).x / 2));
+  ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, alpha / params.background_alpha),
+                     "%s", finished);
+  ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
-   char duration[20];
-   snprintf(duration, sizeof(duration), "Duration: %.1fs", std::chrono::duration<float>(logger->last_log_end() - logger->last_log_begin()).count());
-   ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) - (ImGui::CalcTextSize(duration).x / 2));
-   ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, alpha / params.background_alpha), "%s", duration);
-   for (auto &data_ : benchmark.percentile_data)
-   {
-      char buffer[20];
-      snprintf(buffer, sizeof(buffer), "%s %.1f", data_.first.c_str(), data_.second);
-      ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) - (ImGui::CalcTextSize(buffer).x / 2));
-      ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, alpha / params.background_alpha), "%s %.1f", data_.first.c_str(), data_.second);
-   }
+  char duration[20];
+  snprintf(duration, sizeof(duration), "Duration: %.1fs",
+           std::chrono::duration<float>(logger->last_log_end() -
+                                        logger->last_log_begin())
+               .count());
+  ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) -
+                       (ImGui::CalcTextSize(duration).x / 2));
+  ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, alpha / params.background_alpha),
+                     "%s", duration);
+  for (auto &data_ : benchmark.percentile_data) {
+    char buffer[20];
+    snprintf(buffer, sizeof(buffer), "%s %.1f", data_.first.c_str(),
+             data_.second);
+    ImGui::SetCursorPosX((ImGui::GetWindowSize().x / 2) -
+                         (ImGui::CalcTextSize(buffer).x / 2));
+    ImGui::TextColored(ImVec4(1.0, 1.0, 1.0, alpha / params.background_alpha),
+                       "%s %.1f", data_.first.c_str(), data_.second);
+  }
 
-   float max = benchmark.fps_data.empty() ? 0.0f : *max_element(benchmark.fps_data.begin(), benchmark.fps_data.end());
-   ImVec4 plotColor = HUDElements.colors.frametime;
-   plotColor.w = alpha / params.background_alpha;
-   ImGui::PushStyleColor(ImGuiCol_PlotLines, plotColor);
-   ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0, 0.0, 0.0, alpha / params.background_alpha));
-   ImGui::Dummy(ImVec2(0.0f, 8.0f));
-   if (params.enabled[OVERLAY_PARAM_ENABLED_histogram])
-      ImGui::PlotHistogram("", benchmark.fps_data.data(), benchmark.fps_data.size(), 0, "", 0.0f, max + 10, ImVec2(ImGui::GetContentRegionAvail().x, 50));
-   else
-      ImGui::PlotLines("", benchmark.fps_data.data(), benchmark.fps_data.size(), 0, "", 0.0f, max + 10, ImVec2(ImGui::GetContentRegionAvail().x, 50));
-   ImGui::PopStyleColor(2);
-   ImGui::End();
+  float max =
+      benchmark.fps_data.empty()
+          ? 0.0f
+          : *max_element(benchmark.fps_data.begin(), benchmark.fps_data.end());
+  ImVec4 plotColor = HUDElements.colors.frametime;
+  plotColor.w = alpha / params.background_alpha;
+  ImGui::PushStyleColor(ImGuiCol_PlotLines, plotColor);
+  ImGui::PushStyleColor(ImGuiCol_FrameBg,
+                        ImVec4(0.0, 0.0, 0.0, alpha / params.background_alpha));
+  ImGui::Dummy(ImVec2(0.0f, 8.0f));
+  if (params.enabled[OVERLAY_PARAM_ENABLED_histogram])
+    ImGui::PlotHistogram("", benchmark.fps_data.data(),
+                         benchmark.fps_data.size(), 0, "", 0.0f, max + 10,
+                         ImVec2(ImGui::GetContentRegionAvail().x, 50));
+  else
+    ImGui::PlotLines("", benchmark.fps_data.data(), benchmark.fps_data.size(),
+                     0, "", 0.0f, max + 10,
+                     ImVec2(ImGui::GetContentRegionAvail().x, 50));
+  ImGui::PopStyleColor(2);
+  ImGui::End();
 }
 
-ImVec4 change_on_load_temp(LOAD_DATA &data, unsigned current)
-{
-   if (current >= data.high_load)
-   {
-      return data.color_high;
-   }
-   else if (current >= data.med_load)
-   {
-      float diff = float(current - data.med_load) / float(data.high_load - data.med_load);
-      float x = (data.color_high.x - data.color_med.x) * diff;
-      float y = (data.color_high.y - data.color_med.y) * diff;
-      float z = (data.color_high.z - data.color_med.z) * diff;
-      return ImVec4(data.color_med.x + x, data.color_med.y + y, data.color_med.z + z, HUDElements.params->alpha);
-   }
-   else
-   {
-      float diff = float(current) / float(data.med_load);
-      float x = (data.color_med.x - data.color_low.x) * diff;
-      float y = (data.color_med.y - data.color_low.y) * diff;
-      float z = (data.color_med.z - data.color_low.z) * diff;
-      return ImVec4(data.color_low.x + x, data.color_low.y + y, data.color_low.z + z, HUDElements.params->alpha);
-   }
+ImVec4 change_on_load_temp(LOAD_DATA &data, unsigned current) {
+  if (current >= data.high_load) {
+    return data.color_high;
+  } else if (current >= data.med_load) {
+    float diff =
+        float(current - data.med_load) / float(data.high_load - data.med_load);
+    float x = (data.color_high.x - data.color_med.x) * diff;
+    float y = (data.color_high.y - data.color_med.y) * diff;
+    float z = (data.color_high.z - data.color_med.z) * diff;
+    return ImVec4(data.color_med.x + x, data.color_med.y + y,
+                  data.color_med.z + z, HUDElements.params->alpha);
+  } else {
+    float diff = float(current) / float(data.med_load);
+    float x = (data.color_med.x - data.color_low.x) * diff;
+    float y = (data.color_med.y - data.color_low.y) * diff;
+    float z = (data.color_med.z - data.color_low.z) * diff;
+    return ImVec4(data.color_low.x + x, data.color_low.y + y,
+                  data.color_low.z + z, HUDElements.params->alpha);
+  }
 }
 
-void horizontal_separator(struct overlay_params &params)
-{
-   ImGui::SameLine();
-   ImGui::Spacing();
-   ImGui::SameLine();
+void horizontal_separator(struct overlay_params &params) {
+  ImGui::SameLine();
+  ImGui::Spacing();
+  ImGui::SameLine();
 
-   ImDrawList *drawList = ImGui::GetWindowDrawList();
-   ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-   ImVec2 startPos(cursorPos.x - 5, cursorPos.y + 2);
-   ImVec2 endPos(startPos.x, cursorPos.y + params.font_size * 0.85);
+  ImDrawList *drawList = ImGui::GetWindowDrawList();
+  ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+  ImVec2 startPos(cursorPos.x - 5, cursorPos.y + 2);
+  ImVec2 endPos(startPos.x, cursorPos.y + params.font_size * 0.85);
 
-   float outlineThickness = 1.0f;
+  float outlineThickness = 1.0f;
 
-   if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_text_outline])
-   {
-      // Draw the black outline
-      drawList->AddLine(ImVec2(startPos.x - outlineThickness, startPos.y), ImVec2(startPos.x - outlineThickness, endPos.y), IM_COL32_BLACK, outlineThickness + 2);
-      drawList->AddLine(ImVec2(startPos.x + outlineThickness, startPos.y), ImVec2(startPos.x + outlineThickness, endPos.y), IM_COL32_BLACK, outlineThickness + 2);
-      drawList->AddLine(ImVec2(startPos.x - outlineThickness, startPos.y - outlineThickness / 2), ImVec2(startPos.x + outlineThickness, startPos.y - outlineThickness / 2), IM_COL32_BLACK, outlineThickness + 2);
-      drawList->AddLine(ImVec2(startPos.x - outlineThickness, endPos.y + outlineThickness / 2), ImVec2(startPos.x + outlineThickness, endPos.y + outlineThickness / 2), IM_COL32_BLACK, outlineThickness + 2);
-   }
-   else
-   {
-      outlineThickness *= 2;
-   }
+  if (HUDElements.params->enabled[OVERLAY_PARAM_ENABLED_text_outline]) {
+    // Draw the black outline
+    drawList->AddLine(ImVec2(startPos.x - outlineThickness, startPos.y),
+                      ImVec2(startPos.x - outlineThickness, endPos.y),
+                      IM_COL32_BLACK, outlineThickness + 2);
+    drawList->AddLine(ImVec2(startPos.x + outlineThickness, startPos.y),
+                      ImVec2(startPos.x + outlineThickness, endPos.y),
+                      IM_COL32_BLACK, outlineThickness + 2);
+    drawList->AddLine(ImVec2(startPos.x - outlineThickness,
+                             startPos.y - outlineThickness / 2),
+                      ImVec2(startPos.x + outlineThickness,
+                             startPos.y - outlineThickness / 2),
+                      IM_COL32_BLACK, outlineThickness + 2);
+    drawList->AddLine(
+        ImVec2(startPos.x - outlineThickness, endPos.y + outlineThickness / 2),
+        ImVec2(startPos.x + outlineThickness, endPos.y + outlineThickness / 2),
+        IM_COL32_BLACK, outlineThickness + 2);
+  } else {
+    outlineThickness *= 2;
+  }
 
-   // Draw the separator line
-   ImU32 separator_color = ImGui::ColorConvertFloat4ToU32(HUDElements.colors.horizontal_separator);
-   drawList->AddLine(startPos, endPos, separator_color, outlineThickness);
+  // Draw the separator line
+  ImU32 separator_color =
+      ImGui::ColorConvertFloat4ToU32(HUDElements.colors.horizontal_separator);
+  drawList->AddLine(startPos, endPos, separator_color, outlineThickness);
 
-   ImGui::SameLine();
-   ImGui::Spacing();
+  ImGui::SameLine();
+  ImGui::Spacing();
+}
+
+void test_yogaa() {
+  YGNodeRef root = YGNodeNew();
+  YGNodeStyleSetFlexDirection(root, YGFlexDirectionRow);
+  YGNodeStyleSetWidth(root, 100.0f);
+  YGNodeStyleSetHeight(root, 100.0f);
+
+  YGNodeRef child0 = YGNodeNew();
+  YGNodeStyleSetFlexGrow(child0, 1.0f);
+  YGNodeStyleSetMargin(child0, YGEdgeRight, 10.0f);
+  YGNodeInsertChild(root, child0, 0.0f);
+
+  YGNodeRef child1 = YGNodeNew();
+  YGNodeStyleSetFlexGrow(child1, 1.0f);
+  YGNodeInsertChild(root, child1, 1.0f);
 }
 
 // We should probably start hacking around here
-void render_imgui(swapchain_stats &data, struct overlay_params &params, ImVec2 &window_size, bool is_vulkan)
-{
-   {
-      std::unique_lock<std::mutex> lock(config_mtx);
-      config_cv.wait(lock, []
-                     { return config_ready; });
-   }
-   // data.engine = EngineTypes::GAMESCOPE;
-   HUDElements.sw_stats = &data;
-   HUDElements.params = &params;
-   HUDElements.is_vulkan = is_vulkan;
-   ImGui::GetIO().FontGlobalScale = params.font_scale;
-   static float ralign_width = 0, old_scale = 0;
-   auto io = ImGui::GetIO();
+void render_imgui(swapchain_stats &data, struct overlay_params &params,
+                  ImVec2 &window_size, bool is_vulkan) {
+  {
+    std::unique_lock<std::mutex> lock(config_mtx);
+    config_cv.wait(lock, [] { return config_ready; });
+  }
+  // data.engine = EngineTypes::GAMESCOPE;
+  HUDElements.sw_stats = &data;
+  HUDElements.params = &params;
+  HUDElements.is_vulkan = is_vulkan;
+  ImGui::GetIO().FontGlobalScale = params.font_scale;
+  static float ralign_width = 0, old_scale = 0;
+  auto io = ImGui::GetIO();
 
-   // window_size = ImVec2(params.width, params.height);
+  // window_size = ImVec2(params.width, params.height);
 
-   unsigned height = io.DisplaySize.y;
-   auto now = Clock::now();
+  unsigned height = io.DisplaySize.y;
+  auto now = Clock::now();
 
-   if (old_scale != params.font_scale)
-   {
-      HUDElements.ralign_width = ralign_width = ImGui::CalcTextSize("A").x * 4 /* characters */;
-      old_scale = params.font_scale;
-   }
+  if (old_scale != params.font_scale) {
+    HUDElements.ralign_width = ralign_width =
+        ImGui::CalcTextSize("A").x * 4 /* characters */;
+    old_scale = params.font_scale;
+  }
 
-   ImGuiTableFlags table_flags = ImGuiTableFlags_NoClip;
+  ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollX;
 
-   if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal])
-      table_flags = ImGuiTableFlags_NoClip | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoHostExtendX;
-   if (!params.no_display && !steam_focused && params.table_columns)
-   {
-      ImGui::Begin("Main", &gui_open, ImGuiWindowFlags_NoDecoration); // NoDecoration eats the scrollbar. We need to change it.
-      if (ImGui::BeginTable("hud", params.table_columns, table_flags))
-      {
-         HUDElements.place = 0;
-         for (auto &func : HUDElements.ordered_functions)
-         {
-            ImGui::TableNextColumn();
-            ImGui::Button("HELLO1");
-            ImGui::Image(params.texture_id, ImVec2(140, 168));
-            if (!params.enabled[OVERLAY_PARAM_ENABLED_horizontal] && func.name != "exec")
-               ImGui::TableNextRow();
-            HUDElements.place += 1;
-         }
+  if (params.enabled[OVERLAY_PARAM_ENABLED_horizontal])
+    table_flags = ImGuiTableFlags_NoClip | ImGuiTableFlags_SizingFixedFit |
+                  ImGuiTableFlags_NoHostExtendX;
+  if (!params.no_display && !steam_focused && params.table_columns) {
+    ImGui::Begin(
+        "Main", &gui_open,
+        ImGuiWindowFlags_NoDecoration ^ ImGuiWindowFlags_NoScrollbar); // NoDecoration eats the scrollbar, so we enable it back
 
-         ImGui::EndTable();
-         HUDElements.table_columns_count = 0;
+      if (ImGui::BeginTable("hud", 20, table_flags, window_size)) {
+      HUDElements.place = 0;
+      for (auto &func : HUDElements.ordered_functions) {
+        ImGui::TableNextColumn();
+        ImGui::Image(params.texture_id, ImVec2(140, 168));
+        HUDElements.place += 1;
       }
 
-      //window_size = ImVec2(window_size.x, ImGui::GetCursorPosY() + 10.0f);
-      ImGui::End();
-      //if ((now - logger->last_log_end()) < 12s && !logger->is_active())
-      //render_benchmark(data, params, window_size, height, now);
-   }
+      ImGui::EndTable();
+      HUDElements.table_columns_count = 0;
+    }
+
+    // window_size = ImVec2(window_size.x, ImGui::GetCursorPosY() + 10.0f);
+    ImGui::End();
+    // if ((now - logger->last_log_end()) < 12s && !logger->is_active())
+    // render_benchmark(data, params, window_size, height, now);
+  }
 }
 
-void init_cpu_stats(overlay_params &params)
-{
+void init_cpu_stats(overlay_params &params) {
 #ifdef __linux__
-   auto &enabled = params.enabled;
-   enabled[OVERLAY_PARAM_ENABLED_cpu_stats] = cpuStats.Init() && enabled[OVERLAY_PARAM_ENABLED_cpu_stats];
-   enabled[OVERLAY_PARAM_ENABLED_cpu_temp] = cpuStats.GetCpuFile() && enabled[OVERLAY_PARAM_ENABLED_cpu_temp];
+  auto &enabled = params.enabled;
+  enabled[OVERLAY_PARAM_ENABLED_cpu_stats] =
+      cpuStats.Init() && enabled[OVERLAY_PARAM_ENABLED_cpu_stats];
+  enabled[OVERLAY_PARAM_ENABLED_cpu_temp] =
+      cpuStats.GetCpuFile() && enabled[OVERLAY_PARAM_ENABLED_cpu_temp];
 #endif
 }
 
-struct pci_bus
-{
-   int domain;
-   int bus;
-   int slot;
-   int func;
+struct pci_bus {
+  int domain;
+  int bus;
+  int slot;
+  int func;
 };
 
-void init_system_info()
-{
+void init_system_info() {
 #ifdef __linux__
-   const char *ld_preload = getenv("LD_PRELOAD");
-   if (ld_preload)
-      unsetenv("LD_PRELOAD");
+  const char *ld_preload = getenv("LD_PRELOAD");
+  if (ld_preload)
+    unsetenv("LD_PRELOAD");
 
-   ram = exec("sed -n 's/^MemTotal: *\\([0-9]*\\).*/\\1/p' /proc/meminfo");
-   trim(ram);
-   cpu = exec("sed -n 's/^model name.*: \\(.*\\)/\\1/p' /proc/cpuinfo | sed 's/([^)]*)//g' | tail -n1");
-   trim(cpu);
-   kernel = exec("uname -r");
-   trim(kernel);
-   os = exec("sed -n 's/PRETTY_NAME=\\(.*\\)/\\1/p' /etc/os-release");
-   os.erase(remove(os.begin(), os.end(), '\"'), os.end());
-   trim(os);
-   cpusched = read_line("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+  ram = exec("sed -n 's/^MemTotal: *\\([0-9]*\\).*/\\1/p' /proc/meminfo");
+  trim(ram);
+  cpu = exec("sed -n 's/^model name.*: \\(.*\\)/\\1/p' /proc/cpuinfo | sed "
+             "'s/([^)]*)//g' | tail -n1");
+  trim(cpu);
+  kernel = exec("uname -r");
+  trim(kernel);
+  os = exec("sed -n 's/PRETTY_NAME=\\(.*\\)/\\1/p' /etc/os-release");
+  os.erase(remove(os.begin(), os.end(), '\"'), os.end());
+  trim(os);
+  cpusched = read_line("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
 
-   const char *mangohud_recursion = getenv("MANGOHUD_RECURSION");
-   if (!mangohud_recursion)
-   {
-      setenv("MANGOHUD_RECURSION", "1", 1);
-      // driver = exec("glxinfo -B | sed -n 's/^OpenGL version.*: \\(.*\\)/\\1/p' | sed 's/([^)]*)//g;s/  / /g'");
-      // trim(driver);
-      unsetenv("MANGOHUD_RECURSION");
-   }
-   else
-   {
-      driver = "MangoHud glxinfo recursion detected";
-   }
+  const char *mangohud_recursion = getenv("MANGOHUD_RECURSION");
+  if (!mangohud_recursion) {
+    setenv("MANGOHUD_RECURSION", "1", 1);
+    // driver = exec("glxinfo -B | sed -n 's/^OpenGL version.*: \\(.*\\)/\\1/p'
+    // | sed 's/([^)]*)//g;s/  / /g'"); trim(driver);
+    unsetenv("MANGOHUD_RECURSION");
+  } else {
+    driver = "MangoHud glxinfo recursion detected";
+  }
 
-   // Get WINE version
+  // Get WINE version
 
-   wineProcess = get_exe_path();
-   auto n = wineProcess.find_last_of('/');
-   string preloader = wineProcess.substr(n + 1);
-   if (preloader == "wine-preloader" || preloader == "wine64-preloader")
-   {
-      // Check if using Proton
-      if (wineProcess.find("/dist/bin/wine") != std::string::npos || wineProcess.find("/files/bin/wine") != std::string::npos || wineProcess.find("/dist/bin-wow64/wine") != std::string::npos || wineProcess.find("/files/bin-wow64/wine") != std::string::npos)
-      {
-         stringstream ss;
-         ss << dirname((char *)wineProcess.c_str()) << "/../../version";
-         string protonVersion = ss.str();
-         ss.str("");
-         ss.clear();
-         ss << read_line(protonVersion);
-         std::getline(ss, wineVersion, ' '); // skip first number string
-         std::getline(ss, wineVersion, ' ');
-         trim(wineVersion);
-         string toReplace = "proton-";
-         size_t pos = wineVersion.find(toReplace);
-         if (pos != std::string::npos)
-         {
-            // If found replace
-            wineVersion.replace(pos, toReplace.length(), "Proton ");
-         }
-         else
-         {
-            // If not found insert for non official proton builds
-            wineVersion.insert(0, "Proton ");
-         }
+  wineProcess = get_exe_path();
+  auto n = wineProcess.find_last_of('/');
+  string preloader = wineProcess.substr(n + 1);
+  if (preloader == "wine-preloader" || preloader == "wine64-preloader") {
+    // Check if using Proton
+    if (wineProcess.find("/dist/bin/wine") != std::string::npos ||
+        wineProcess.find("/files/bin/wine") != std::string::npos ||
+        wineProcess.find("/dist/bin-wow64/wine") != std::string::npos ||
+        wineProcess.find("/files/bin-wow64/wine") != std::string::npos) {
+      stringstream ss;
+      ss << dirname((char *)wineProcess.c_str()) << "/../../version";
+      string protonVersion = ss.str();
+      ss.str("");
+      ss.clear();
+      ss << read_line(protonVersion);
+      std::getline(ss, wineVersion, ' '); // skip first number string
+      std::getline(ss, wineVersion, ' ');
+      trim(wineVersion);
+      string toReplace = "proton-";
+      size_t pos = wineVersion.find(toReplace);
+      if (pos != std::string::npos) {
+        // If found replace
+        wineVersion.replace(pos, toReplace.length(), "Proton ");
+      } else {
+        // If not found insert for non official proton builds
+        wineVersion.insert(0, "Proton ");
       }
+    } else {
+      char *dir = dirname((char *)wineProcess.c_str());
+      stringstream findVersion;
+      if (preloader == "wine-preloader")
+        findVersion << "\"" << dir << "/wine\" --version";
       else
-      {
-         char *dir = dirname((char *)wineProcess.c_str());
-         stringstream findVersion;
-         if (preloader == "wine-preloader")
-            findVersion << "\"" << dir << "/wine\" --version";
-         else
-            findVersion << "\"" << dir << "/wine64\" --version";
-         const char *wine_env = getenv("WINELOADERNOEXEC");
-         if (wine_env)
-            unsetenv("WINELOADERNOEXEC");
-         wineVersion = exec(findVersion.str());
-         trim(wineVersion);
-         SPDLOG_DEBUG("WINE version: {}", wineVersion);
-         if (wine_env)
-            setenv("WINELOADERNOEXEC", wine_env, 1);
-      }
-   }
-   else
-   {
-      wineVersion = "";
-   }
+        findVersion << "\"" << dir << "/wine64\" --version";
+      const char *wine_env = getenv("WINELOADERNOEXEC");
+      if (wine_env)
+        unsetenv("WINELOADERNOEXEC");
+      wineVersion = exec(findVersion.str());
+      trim(wineVersion);
+      SPDLOG_DEBUG("WINE version: {}", wineVersion);
+      if (wine_env)
+        setenv("WINELOADERNOEXEC", wine_env, 1);
+    }
+  } else {
+    wineVersion = "";
+  }
 
-   check_for_vkbasalt_and_gamemode();
+  check_for_vkbasalt_and_gamemode();
 
-   if (ld_preload)
-      setenv("LD_PRELOAD", ld_preload, 1);
+  if (ld_preload)
+    setenv("LD_PRELOAD", ld_preload, 1);
 
-   SPDLOG_DEBUG("Ram:{}", ram);
-   SPDLOG_DEBUG("Cpu:{}", cpu);
-   SPDLOG_DEBUG("Kernel:{}", kernel);
-   SPDLOG_DEBUG("Os:{}", os);
-   SPDLOG_DEBUG("Driver:{}", driver);
-   SPDLOG_DEBUG("CPU Scheduler:{}", cpusched);
+  SPDLOG_DEBUG("Ram:{}", ram);
+  SPDLOG_DEBUG("Cpu:{}", cpu);
+  SPDLOG_DEBUG("Kernel:{}", kernel);
+  SPDLOG_DEBUG("Os:{}", os);
+  SPDLOG_DEBUG("Driver:{}", driver);
+  SPDLOG_DEBUG("CPU Scheduler:{}", cpusched);
 #endif
 }
 
-void check_for_vkbasalt_and_gamemode()
-{
+void check_for_vkbasalt_and_gamemode() {
 #ifdef __linux__
-   std::string pid =
-       HUDElements.g_gamescopePid != -1 ? std::to_string(HUDElements.g_gamescopePid) : "self";
-   std::string proc_path = "/proc/" + pid + "/map_files";
+  std::string pid = HUDElements.g_gamescopePid != -1
+                        ? std::to_string(HUDElements.g_gamescopePid)
+                        : "self";
+  std::string proc_path = "/proc/" + pid + "/map_files";
 
-   try
-   {
-      fs::path path(proc_path);
+  try {
+    fs::path path(proc_path);
 
-      for (auto &p : fs::directory_iterator(path))
-      {
-         auto filename = p.path().string();
-         auto sym = read_symlink(filename.c_str());
-         if (sym.find("gamemode") != std::string::npos)
-            HUDElements.gamemode_bol = true;
-         if (sym.find("vkbasalt") != std::string::npos)
-            HUDElements.vkbasalt_bol = true;
-         if (HUDElements.gamemode_bol && HUDElements.vkbasalt_bol)
-            break;
-      }
-   }
-   catch (const ghc::filesystem::filesystem_error &ex)
-   {
-      SPDLOG_DEBUG("{}", ex.what());
-   }
+    for (auto &p : fs::directory_iterator(path)) {
+      auto filename = p.path().string();
+      auto sym = read_symlink(filename.c_str());
+      if (sym.find("gamemode") != std::string::npos)
+        HUDElements.gamemode_bol = true;
+      if (sym.find("vkbasalt") != std::string::npos)
+        HUDElements.vkbasalt_bol = true;
+      if (HUDElements.gamemode_bol && HUDElements.vkbasalt_bol)
+        break;
+    }
+  } catch (const ghc::filesystem::filesystem_error &ex) {
+    SPDLOG_DEBUG("{}", ex.what());
+  }
 #endif
 }
 
-void update_fan()
-{
-   // This just handles steam deck fan for now
-   static bool init;
-   string hwmon_path;
+void update_fan() {
+  // This just handles steam deck fan for now
+  static bool init;
+  string hwmon_path;
 
-   if (!init)
-   {
-      string path = "/sys/class/hwmon/";
-      auto dirs = ls(path.c_str(), "hwmon", LS_DIRS);
-      for (auto &dir : dirs)
-      {
-         string full_path = (path + dir + "/name").c_str();
-         if (read_line(full_path).find("steamdeck_hwmon") != string::npos)
-         {
-            hwmon_path = path + dir + "/fan1_input";
-            break;
-         }
+  if (!init) {
+    string path = "/sys/class/hwmon/";
+    auto dirs = ls(path.c_str(), "hwmon", LS_DIRS);
+    for (auto &dir : dirs) {
+      string full_path = (path + dir + "/name").c_str();
+      if (read_line(full_path).find("steamdeck_hwmon") != string::npos) {
+        hwmon_path = path + dir + "/fan1_input";
+        break;
       }
-   }
+    }
+  }
 
-   if (!hwmon_path.empty())
-      fan_speed = stoi(read_line(hwmon_path));
-   else
-      fan_speed = -1;
+  if (!hwmon_path.empty())
+    fan_speed = stoi(read_line(hwmon_path));
+  else
+    fan_speed = -1;
 }
 
-void next_hud_position(struct overlay_params &params)
-{
-   if (params.position < (overlay_param_position::LAYER_POSITION_COUNT - 1))
-   {
-      params.position = static_cast<overlay_param_position>(params.position + 1);
-   }
-   else
-   {
-      params.position = static_cast<overlay_param_position>(0);
-   }
+void next_hud_position(struct overlay_params &params) {
+  if (params.position < (overlay_param_position::LAYER_POSITION_COUNT - 1)) {
+    params.position = static_cast<overlay_param_position>(params.position + 1);
+  } else {
+    params.position = static_cast<overlay_param_position>(0);
+  }
 }
 
 #pragma GCC diagnostic pop
