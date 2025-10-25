@@ -1,3 +1,6 @@
 [submodule "modules/minhook"]
 	path = modules/minhook
 	url = https://github.com/flightlessmango/minhook
+[submodule "subprojects/yoga"]
+	path = subprojects/yoga
+	url = git@github.com:facebook/yoga.git
