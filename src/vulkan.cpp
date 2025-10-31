@@ -21,6 +21,7 @@
  * IN THE SOFTWARE.
  */
 #include "shared_x11.h"
+#include <X11/Xlib.h>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -247,6 +248,8 @@ static void unmap_object(uint64_t obj) {
   ::scoped_lock lk(global_lock);
   vk_object_to_data.erase(obj);
 }
+
+static std::once_flag xinitThreads;
 
 /**/
 
@@ -1473,13 +1476,28 @@ static void setup_swapchain_data(struct swapchain_data *data,
                     data->sw_stats, device_data->instance->params);
 
 #ifdef __linux__
+  std::call_once(xinitThreads, []() {
+    XInitThreads();
+  });
+
   init_x11();
 
   Display *display = get_xdisplay();
   Window window = find_window(display);
 
   if (window)
-     ImGui_ImplXlib_Init(display, window);
+    ImGui_ImplXlib_Init(display, window);
+
+  std::thread eventThread([&]() {
+    XEvent ev;
+    SPDLOG_INFO("Before XPending display {0:p} {1:d}", (void *)display, window);
+    while (XPending(display) > 0) {
+      SPDLOG_INFO("Before NextEvent display {0:p} {1:d}", (void *)display, window);
+      XNextEvent(display, &ev);
+      SPDLOG_INFO("After NextEvent display {0:p}", (void *)display);
+      ImGui_ImplXlib_ProcessEvent(&ev);
+    }
+  });
 #endif
 
   /* Render pass */

@@ -9,6 +9,8 @@
 
 static std::unique_ptr<Display, std::function<void(Display*)>> display;
 
+int errorHandler(Display*, XErrorEvent*);
+
 bool init_x11() {
     static bool failed = false;
     if (failed)
@@ -35,10 +37,13 @@ bool init_x11() {
 
     display = { libx11->XOpenDisplay(displayid),
         [libx11](Display* dpy) {
+            SPDLOG_INFO("CLOSING DISPLAY");
             if (dpy)
                 libx11->XCloseDisplay(dpy);
         }
     };
+
+    XSetErrorHandler(errorHandler);
 
     failed = !display;
     if (failed) {
@@ -61,4 +66,10 @@ bool init_x11() {
 Display* get_xdisplay()
 {
     return display.get();
+}
+
+int errorHandler(Display *dpy, XErrorEvent *error) {
+    SPDLOG_ERROR("ERROR CODE {0:d}", error->error_code);
+
+    return 0;
 }

@@ -44,6 +44,7 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <iostream>
 #include <time.h> // clock_gettime()
 #include <unistd.h>
 
@@ -543,6 +544,8 @@ bool ImGui_ImplXlib_ProcessEvent(XEvent *event) {
 }
 
 bool ImGui_ImplXlib_Init(Display *display, Window window) {
+  SPDLOG_INFO("Initializing with window {0:d}", window);
+
   ImGuiIO &io = ImGui::GetIO();
   IM_ASSERT(io.BackendPlatformUserData == nullptr &&
             "Already initialized a platform backend!");
@@ -578,10 +581,6 @@ bool ImGui_ImplXlib_Init(Display *display, Window window) {
     bd->XA_MIME[i] = XInternAtom(bd->Dpy, text_mime_types[i - 1], 0);
   }
 
-  // Select keyboard/focus events
-  XSelectInput(display, window,
-               KeyPressMask | KeyReleaseMask | FocusChangeMask);
-
   // Setup XInput for mouse inputs
   int xi2_opcode, xi2_event, xi2_error;
   Bool ret = XQueryExtension(display, "XInputExtension", &xi2_opcode,
@@ -592,24 +591,28 @@ bool ImGui_ImplXlib_Init(Display *display, Window window) {
   bd->Xi2Opcode = xi2_opcode;
 
   XIEventMask xi2_eventmask = {};
-  static unsigned char xi2_mask[XIMaskLen(XI_LASTEVENT)] = {};
+  unsigned char xi2_mask[(XI_LASTEVENT + 7)/8] = {0};
 
   XISetMask(xi2_mask, XI_Motion);
   XISetMask(xi2_mask, XI_ButtonPress);
   XISetMask(xi2_mask, XI_ButtonRelease);
 
-  xi2_eventmask.deviceid = XIAllMasterDevices;
+  xi2_eventmask.deviceid = XIAllDevices;
   xi2_eventmask.mask_len = sizeof(xi2_mask);
   xi2_eventmask.mask = xi2_mask;
 
-  XISelectEvents(display, window, &xi2_eventmask, 1);
+    SPDLOG_INFO("SELECTING EVENTS");
+
+  XISelectEvents(display, DefaultRootWindow(display), &xi2_eventmask, 1);
+
+    SPDLOG_INFO("SELECTED EVENTS");
 
   // Setup XIM
 #ifdef X_HAVE_UTF8_STRING
   XSetLocaleModifiers("");
   bd->IM = XOpenIM(display, NULL, NULL, NULL);
-  bd->IC = XCreateIC(bd->IM, XNClientWindow, window, XNFocusWindow, window,
-                     XNInputStyle, XIMPreeditNothing | XIMStatusNothing, NULL);
+ // bd->IC = XCreateIC(bd->IM, XNClientWindow, window, XNFocusWindow, window,
+ //                    XNInputStyle, XIMPreeditNothing | XIMStatusNothing, NULL);
 #endif
 
   // Load mouse cursors
@@ -631,6 +634,8 @@ bool ImGui_ImplXlib_Init(Display *display, Window window) {
       XCreateFontCursor(display, XC_hand2);
   bd->MouseCursors[ImGuiMouseCursor_NotAllowed] =
       XCreateFontCursor(display, XC_pirate);
+
+  SPDLOG_INFO("Initialized with window {0:d}", window);
 
   return true;
 }
@@ -832,6 +837,9 @@ Window find_window(Display *dpy) {
       // ascend to top-level ancestor (in case of reparenting frames)
       Window top = top_level_ancestor(dpy, root, w);
       result = top;
+
+      SPDLOG_INFO("Found window ancestor {0:d}", result);
+
       break;
     }
   }
@@ -839,9 +847,14 @@ Window find_window(Display *dpy) {
   if (children)
     XFree(children);
 
-  SPDLOG_INFO("Process window found, {0:d}", result);
+  Window win;
 
-  return result;
+  std::cout << "Input the window n plss" << std::endl;
+  scanf("%ld", &win);
+
+  SPDLOG_INFO("Process window found, {0:d}", win);
+
+  return win;
 }
 
 #endif // #ifndef IMGUI_DISABLE
