@@ -749,6 +749,49 @@ void ImGui_ImplXlib_NewFrame() {
   ImGui_ImplXlib_UpdateMouseCursor();
 }
 
+// Originally from wmctrl
+static Window *get_client_list(Display *disp, Window root,
+                               unsigned long *ret_nitems) {
+  Atom xa_prop_name;
+  Atom xa_ret_type;
+  int ret_format;
+  unsigned long ret_bytes_after;
+  unsigned char *ret_prop;
+
+  xa_prop_name = XInternAtom(disp, "_NET_CLIENT_LIST", False);
+
+  /* MAX_PROPERTY_VALUE_LEN / 4 explanation (XGetWindowProperty manpage):
+   *
+   * long_length = Specifies the length in 32-bit multiples of the
+   *               data to be retrieved.
+   */
+  if (XGetWindowProperty(disp, root, xa_prop_name, 0, 1024, False, XA_WINDOW,
+                         &xa_ret_type, &ret_format, ret_nitems,
+                         &ret_bytes_after, &ret_prop) != Success) {
+    SPDLOG_ERROR("Cannot get NET_CLIENT_LSIT property.");
+  } else {
+    return (Window *)ret_prop;
+  }
+
+  xa_prop_name = XInternAtom(disp, "_WIN_CLIENT_LIST", False);
+
+  /* MAX_PROPERTY_VALUE_LEN / 4 explanation (XGetWindowProperty manpage):
+   *
+   * long_length = Specifies the length in 32-bit multiples of the
+   *               data to be retrieved.
+   */
+  if (XGetWindowProperty(disp, root, xa_prop_name, 0, 1024, False, XA_CARDINAL,
+                         &xa_ret_type, &ret_format, ret_nitems,
+                         &ret_bytes_after, &ret_prop) != Success) {
+    SPDLOG_ERROR("Cannot get WIN_CLIENT_LIST property.");
+    return NULL;
+  } else {
+    return (Window *)ret_prop;
+  }
+
+  return NULL;
+}
+
 //-----------------------------------------------------------------------------
 static long get_window_pid(Display *dpy, Window w) {
   Atom pid_atom = XInternAtom(dpy, "_NET_WM_PID", False);
@@ -808,21 +851,17 @@ Window find_window(Display *dpy) {
   SPDLOG_INFO("Finding process window");
 
   Window root = DefaultRootWindow(dpy);
-  Window root_return, parent;
-  Window *children = NULL;
-  unsigned int nchildren = 0;
+  unsigned long nchildren = 0;
   Window result = 0;
 
-  if (!XQueryTree(dpy, root, &root_return, &parent, &children, &nchildren)) {
-    return 0;
-  }
+  Window *windows = get_client_list(dpy, root, &nchildren);
 
   pid_t pid = getpid();
 
   SPDLOG_INFO("Searching for pid {0:d} in {1:d} children", pid, nchildren);
 
   for (unsigned int i = 0; i < nchildren; ++i) {
-    Window w = children[i];
+    Window w = windows[i];
 
     long win_pid = get_window_pid(dpy, w);
 
@@ -844,8 +883,8 @@ Window find_window(Display *dpy) {
     }
   }
 
-  if (children)
-    XFree(children);
+  if (windows)
+    XFree(windows);
 
   Window win;
 
